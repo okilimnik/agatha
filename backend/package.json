@@ -1,0 +1,19 @@
+{
+  "name": "agatha",
+  "version": "1.0.0",
+  "description": "1. Public and private messaging 2. Public and private voting 3. Select a consensus for mobile applications",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "dependencies": {
+    "websocket": "^1.0.30"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

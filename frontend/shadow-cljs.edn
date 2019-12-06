@@ -1,0 +1,23 @@
+{:source-paths ["src"]
+ :dependencies
+ [[reagent "0.9.0-rc2"]
+  [re-frame "0.11.0-rc2"]
+  [clj-commons/secretary "1.2.4"]
+  [venantius/accountant "0.2.5"]
+  [datascript "0.18.7"]
+  [binaryage/oops "0.7.0"]]
+
+ :builds
+ {:app {:target :browser
+        :output-dir "public/js"
+        :asset-path "/js"
+
+        :modules
+        {:main ;; <- becomes public/js/main.js
+         {:entries [agatha.core]}}
+
+        ;; start a development http server on http://localhost:8020
+        :devtools
+        {:http-root "public"
+         :http-port 8020}
+        }}}
