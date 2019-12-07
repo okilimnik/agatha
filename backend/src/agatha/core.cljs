@@ -12,11 +12,17 @@
 (def key-file-path "/etc/pki/tls/private/mdn-samples.mozilla.org.key")
 (def cert-file-path "/etc/pki/tls/certs/mdn-samples.mozilla.org.crt")
 
+;; Servers and connection options
+
+(def web-server (atom nil))
+(def https-options (atom {}))
+(def ws-server (atom nil))
+
 ;; Used for managing the text chat user list.
 
 (def connection-array (atom []))
 (def next-id (atom (js/Date.now)))
-(def append-to-make-unique 1)
+(def append-to-make-unique (atom 1))
 
 (defn log
   "Output logging information to console"
@@ -80,113 +86,161 @@
   (ocall response :writeHead 404)
   (ocall response :end))
 
-;; Try to load the key and certificate files for SSL so we can
-;; do HTTPS (required for non-local WebRTC).
+(defn start []
 
-(def https-options (atom {}))
+  ;; Try to load the key and certificate files for SSL so we can
+  ;; do HTTPS (required for non-local WebRTC).
 
-(try
-  (do (swap! https-options assoc :key (ocall fs :readFileSync key-file-path))
-      (swap! https-options assoc :cert (ocall fs :readFileSync cert-file-path)))
-  (catch js/Error e (reset! https-options {})))
-
-;; If we were able to get the key and certificate files, try to
-;; start up an HTTPS server.
-
-(def web-server (atom nil))
-
-(try
-  (when-not (empty? @https-options)
-    (reset! web-server (ocall https :createServer (clj->js @https-options) handle-web-request)))
-  (catch js/Error e (reset! web-server nil)))
-
-(when-not @web-server
   (try
-    (reset! web-server (ocall http :createServer #js {} handle-web-request))
-    (catch js/Error e (do (reset! web-server nil)
-                          (log "Error attempting to create HTTP(s) server: " (ocall e :toString))))))
+    (do (swap! https-options assoc :key (ocall fs :readFileSync key-file-path))
+        (swap! https-options assoc :cert (ocall fs :readFileSync cert-file-path)))
+    (catch js/Error e (reset! https-options {})))
 
-;; Spin up the HTTPS server on the port assigned to this sample.
-;; This will be turned into a WebSocket port very shortly.
+  ;; If we were able to get the key and certificate files, try to
+  ;; start up an HTTPS server.
 
-(ocall @web-server :listen 6503 #(log "Server is listening on port 6503"))
+  (try
+    (when-not (empty? @https-options)
+      (reset! web-server (ocall https :createServer (clj->js @https-options) handle-web-request)))
+    (catch js/Error e (reset! web-server nil)))
 
-;; Create the WebSocket server by converting the HTTPS server into one.
+  (when-not @web-server
+    (try
+      (reset! web-server (ocall http :createServer #js {} handle-web-request))
+      (catch js/Error e (do (reset! web-server nil)
+                            (log "Error attempting to create HTTP(s) server: " (ocall e :toString))))))
 
-(def ws-server (atom (server. #js {:httpServer            @web-server
-                                   :autoAcceptConnections false})))
+  ;; Spin up the HTTPS server on the port assigned to this sample.
+  ;; This will be turned into a WebSocket port very shortly.
 
-(when-not @ws-server
-  (log "ERROR: Unable to create WebSocket server!"))
+  (ocall @web-server :listen 6503 #(log "Server is listening on port 6503"))
 
-;; Set up a "connect" message handler on our WebSocket server. This is
-;; called whenever a user connects to the server's port using the
-;; WebSocket protocol.
+  ;; Create the WebSocket server by converting the HTTPS server into one.
 
-(ocall @ws-server :on "request"
-       (fn [request]
-         (let [origin (oget request "origin")]
-           (if-not (origin-is-allowed? origin)
-             (do (ocall request :reject)
-                 (log "Connection from " origin " rejected."))
+  (reset! ws-server (server. #js {:httpServer            @web-server
+                                  :autoAcceptConnections false}))
 
-             ;; Accept the request and get a connection.
+  (when-not @ws-server
+    (log "ERROR: Unable to create WebSocket server!"))
 
-             (let [connection (ocall request :accept "json" origin)]
+  ;; Set up a "connect" message handler on our WebSocket server. This is
+  ;; called whenever a user connects to the server's port using the
+  ;; WebSocket protocol.
 
-               ;; Add the new connection to our list of connections.
+  (ocall @ws-server :on "request"
+         (fn [request]
+           (let [origin (oget request "origin")]
+             (if-not (origin-is-allowed? origin)
+               (do (ocall request :reject)
+                   (log "Connection from " origin " rejected."))
 
-               (log "Connection accepted from " + (oget connection "remoteAddress") + ".")
-               (swap! connection-array conj connection)
+               ;; Accept the request and get a connection.
 
-               (oset! connection "clientID" @next-id)
-               (swap! next-id inc)
+               (let [connection (ocall request :accept "json" origin)]
 
-               ;; Send the new client its token; it send back a "username" message to
-               ;; tell us what username they want to use.
+                 ;; Add the new connection to our list of connections.
 
-               (ocall connection :sendUTF (js/JSON.stringify #js {:type "id" :id (oget connection "clientID")}))
+                 (log "Connection accepted from " + (oget connection "remoteAddress") + ".")
+                 (swap! connection-array conj connection)
 
-               ;; Set up a handler for the "message" event received over WebSocket. This
-               ;; is a message sent by a client, and may be text to share with other
-               ;; users, a private message (text or signaling) for one user, or a command
-               ;; to the server.
+                 (oset! connection "clientID" @next-id)
+                 (swap! next-id inc)
 
-               (ocall connection :on  "message"
-                      (fn [message]
-                        (when (= (oget message "type") "utf8")
-                          (log "Received Message: " (oget message "utf8Data"))
+                 ;; Send the new client its token; it send back a "username" message to
+                 ;; tell us what username they want to use.
 
-                          ;; Process incoming data.
+                 (ocall connection :sendUTF (js/JSON.stringify #js {:type "id" :id (oget connection "clientID")}))
 
-                          (let [msg (js/JSON.parse (oget message "utf8Data"))
-                                connect (get-connection-for-id (oget msg "id"))]
+                 ;; Set up a handler for the "message" event received over WebSocket. This
+                 ;; is a message sent by a client, and may be text to share with other
+                 ;; users, a private message (text or signaling) for one user, or a command
+                 ;; to the server.
 
-                            ;; Take a look at the incoming object and act on it based
-                            ;; on its type. Unknown message types are passed through,
-                            ;; since they may be used to implement client-side features.
-                            ;; Messages with a "target" property are sent only to a user
-                            ;; by that name.
+                 (ocall connection :on "message"
+                        (fn [message]
+                          (when (= (oget message "type") "utf8")
+                            (log "Received Message: " (oget message "utf8Data"))
 
-                            (case (oget msg "type")
-                              ;; Public, textual message
-                              "message" (do (oset! msg "name" (oget connect "username"))
-                                            (oset! msg "text" (clojure.string/replace (oget msg "text") #"/(<([^>]+)>)/ig" "")))
+                            ;; Process incoming data.
 
-                              ;; Username change
-                              "username" (do )
+                            (let [send-to-clients (atom true)
+                                  msg (js/JSON.parse (oget message "utf8Data"))
+                                  connect (get-connection-for-id (oget msg "id"))]
 
-                              )
+                              ;; Take a look at the incoming object and act on it based
+                              ;; on its type. Unknown message types are passed through,
+                              ;; since they may be used to implement client-side features.
+                              ;; Messages with a "target" property are sent only to a user
+                              ;; by that name.
 
-                            )
-                          )))
-               )
+                              (case (oget msg "type")
+                                ;; Public, textual message
+                                "message" (do (oset! msg "name" (oget connect "username"))
+                                              (oset! msg "text" (clojure.string/replace (oget msg "text") #"/(<([^>]+)>)/ig" "")))
 
-             ))))
+                                ;; Username change
+                                "username" (let [name-changed? (atom false)
+                                                 orig-name (oget msg "name")]
 
+                                             ;; Ensure the name is unique by appending a number to it
+                                             ;; if it's not; keep trying that until it works.
+                                             (loop []
+                                               (when-not (is-username-unique? (oget msg "name"))
+                                                 (oset! msg "name" (str orig-name @append-to-make-unique))
+                                                 (swap! append-to-make-unique inc)
+                                                 (reset! name-changed? true)
+                                                 (recur)))
+
+                                             ;; If the name had to be changed, we send a "rejectusername"
+                                             ;; message back to the user so they know their name has been
+                                             ;; altered by the server.
+                                             (when @name-changed?
+                                               (ocall connect :sendUTF (js/JSON.stringify #js {:id   (oget msg "id")
+                                                                                               :type "rejectusername"
+                                                                                               :name (oget msg "name")})))
+
+                                             ;; Set this connection's final username and send out the
+                                             ;; updated user list to all users. Yeah, we're sending a full
+                                             ;; list instead of just updating. It's horribly inefficient
+                                             ;; but this is a demo. Don't do this in a real app.
+                                             (oset! connect "username" (oget msg "name"))
+                                             (send-user-list-to-all)
+                                             (reset! send-to-clients false))
+                                "default")
+
+                              ;; Convert the revised message back to JSON and send it out
+                              ;; to the specified client or all clients, as appropriate. We
+                              ;; pass through any messages not specifically handled
+                              ;; in the select block above. This allows the clients to
+                              ;; exchange signaling and other control objects unimpeded.
+
+                              (when @send-to-clients
+                                (let [msg-string (js/JSON.stringify msg)]
+
+                                  ;; If the message specifies a target username, only send the
+                                  ;; message to them. Otherwise, send it to every user.
+                                  (if-not (clojure.string/blank? (oget msg "target"))
+                                    (send-to-one-user (oget msg "target") msg-string)
+                                    (mapv #(ocall % :sendUTF msg-string) connection-array))))))))
+
+                 ;; Handle the WebSocket "close" event; this means a user has logged off
+                 ;; or has been disconnected.
+                 (ocall connection :on "close"
+                        (fn [reason description]
+                          ;; First, remove the connection from the list of connections.
+                          (reset! connection-array (filterv #(oget % "connected") @connection-array))
+
+                          ;; Now send the updated user list. Again, please don't do this in a
+                          ;; real application. Your users won't like you very much.
+                          (send-user-list-to-all)
+
+                          ;; Build and output log output for close information.
+
+                          (log "Connection closed: " (oget connection "remoteAddress") " (" reason
+                               (if (clojure.string/blank? description) "" (str ": " description)) ")")))))))))
 
 (defn reload! []
   (println "Code updated."))
 
 (defn main! []
-  )
+  (start))
