@@ -86,7 +86,124 @@
   (ocall response :writeHead 404)
   (ocall response :end))
 
-(defn start []
+(defn on-message
+  [message]
+  (when (= (oget message "type") "utf8")
+    (log "Received Message: " (oget message "utf8Data"))
+
+    ;; Process incoming data.
+
+    (let [send-to-clients (atom true)
+          msg (js/JSON.parse (oget message "utf8Data"))
+          connect (get-connection-for-id (oget msg "id"))]
+
+      ;; Take a look at the incoming object and act on it based
+      ;; on its type. Unknown message types are passed through,
+      ;; since they may be used to implement client-side features.
+      ;; Messages with a "target" property are sent only to a user
+      ;; by that name.
+
+      (case (oget msg "type")
+        ;; Public, textual message
+        "message" (do (oset! msg "name" (oget connect "username"))
+                      (oset! msg "text" (clojure.string/replace (oget msg "text") #"/(<([^>]+)>)/ig" "")))
+
+        ;; Username change
+        "username" (let [name-changed? (atom false)
+                         orig-name (oget msg "name")]
+
+                     ;; Ensure the name is unique by appending a number to it
+                     ;; if it's not; keep trying that until it works.
+                     (loop []
+                       (when-not (is-username-unique? (oget msg "name"))
+                         (oset! msg "name" (str orig-name @append-to-make-unique))
+                         (swap! append-to-make-unique inc)
+                         (reset! name-changed? true)
+                         (recur)))
+
+                     ;; If the name had to be changed, we send a "rejectusername"
+                     ;; message back to the user so they know their name has been
+                     ;; altered by the server.
+                     (when @name-changed?
+                       (ocall connect :sendUTF (js/JSON.stringify #js {:id   (oget msg "id")
+                                                                       :type "rejectusername"
+                                                                       :name (oget msg "name")})))
+
+                     ;; Set this connection's final username and send out the
+                     ;; updated user list to all users. Yeah, we're sending a full
+                     ;; list instead of just updating. It's horribly inefficient
+                     ;; but this is a demo. Don't do this in a real app.
+                     (oset! connect "username" (oget msg "name"))
+                     (send-user-list-to-all)
+                     (reset! send-to-clients false))
+        "default")
+
+      ;; Convert the revised message back to JSON and send it out
+      ;; to the specified client or all clients, as appropriate. We
+      ;; pass through any messages not specifically handled
+      ;; in the select block above. This allows the clients to
+      ;; exchange signaling and other control objects unimpeded.
+
+      (when @send-to-clients
+        (let [msg-string (js/JSON.stringify msg)]
+
+          ;; If the message specifies a target username, only send the
+          ;; message to them. Otherwise, send it to every user.
+          (if-not (clojure.string/blank? (oget msg "target"))
+            (send-to-one-user (oget msg "target") msg-string)
+            (mapv #(ocall % :sendUTF msg-string) connection-array)))))))
+
+(defn on-close
+  [connection reason description]
+  ;; First, remove the connection from the list of connections.
+  (reset! connection-array (filterv #(oget % "connected") @connection-array))
+
+  ;; Now send the updated user list. Again, please don't do this in a
+  ;; real application. Your users won't like you very much.
+  (send-user-list-to-all)
+
+  ;; Build and output log output for close information.
+
+  (log "Connection closed: " (oget connection "remoteAddress") " (" reason
+       (if (clojure.string/blank? description) "" (str ": " description)) ")"))
+
+(defn on-request
+  [request]
+  (let [origin (oget request "origin")]
+    (if-not (origin-is-allowed? origin)
+      (do (ocall request :reject)
+          (log "Connection from " origin " rejected."))
+
+      ;; Accept the request and get a connection.
+
+      (let [connection (ocall request :accept "json" origin)]
+
+        ;; Add the new connection to our list of connections.
+
+        (log "Connection accepted from " + (oget connection "remoteAddress") + ".")
+        (swap! connection-array conj connection)
+
+        (oset! connection "clientID" @next-id)
+        (swap! next-id inc)
+
+        ;; Send the new client its token; it send back a "username" message to
+        ;; tell us what username they want to use.
+
+        (ocall connection :sendUTF (js/JSON.stringify #js {:type "id" :id (oget connection "clientID")}))
+
+        ;; Set up a handler for the "message" event received over WebSocket. This
+        ;; is a message sent by a client, and may be text to share with other
+        ;; users, a private message (text or signaling) for one user, or a command
+        ;; to the server.
+
+        (ocall connection :on "message" on-message)
+
+        ;; Handle the WebSocket "close" event; this means a user has logged off
+        ;; or has been disconnected.
+        (ocall connection :on "close" (partial on-close connection))))))
+
+(defn start
+  []
 
   ;; Try to load the key and certificate files for SSL so we can
   ;; do HTTPS (required for non-local WebRTC).
@@ -127,120 +244,12 @@
   ;; called whenever a user connects to the server's port using the
   ;; WebSocket protocol.
 
-  (ocall @ws-server :on "request"
-         (fn [request]
-           (let [origin (oget request "origin")]
-             (if-not (origin-is-allowed? origin)
-               (do (ocall request :reject)
-                   (log "Connection from " origin " rejected."))
+  (ocall @ws-server :on "request" on-request))
 
-               ;; Accept the request and get a connection.
-
-               (let [connection (ocall request :accept "json" origin)]
-
-                 ;; Add the new connection to our list of connections.
-
-                 (log "Connection accepted from " + (oget connection "remoteAddress") + ".")
-                 (swap! connection-array conj connection)
-
-                 (oset! connection "clientID" @next-id)
-                 (swap! next-id inc)
-
-                 ;; Send the new client its token; it send back a "username" message to
-                 ;; tell us what username they want to use.
-
-                 (ocall connection :sendUTF (js/JSON.stringify #js {:type "id" :id (oget connection "clientID")}))
-
-                 ;; Set up a handler for the "message" event received over WebSocket. This
-                 ;; is a message sent by a client, and may be text to share with other
-                 ;; users, a private message (text or signaling) for one user, or a command
-                 ;; to the server.
-
-                 (ocall connection :on "message"
-                        (fn [message]
-                          (when (= (oget message "type") "utf8")
-                            (log "Received Message: " (oget message "utf8Data"))
-
-                            ;; Process incoming data.
-
-                            (let [send-to-clients (atom true)
-                                  msg (js/JSON.parse (oget message "utf8Data"))
-                                  connect (get-connection-for-id (oget msg "id"))]
-
-                              ;; Take a look at the incoming object and act on it based
-                              ;; on its type. Unknown message types are passed through,
-                              ;; since they may be used to implement client-side features.
-                              ;; Messages with a "target" property are sent only to a user
-                              ;; by that name.
-
-                              (case (oget msg "type")
-                                ;; Public, textual message
-                                "message" (do (oset! msg "name" (oget connect "username"))
-                                              (oset! msg "text" (clojure.string/replace (oget msg "text") #"/(<([^>]+)>)/ig" "")))
-
-                                ;; Username change
-                                "username" (let [name-changed? (atom false)
-                                                 orig-name (oget msg "name")]
-
-                                             ;; Ensure the name is unique by appending a number to it
-                                             ;; if it's not; keep trying that until it works.
-                                             (loop []
-                                               (when-not (is-username-unique? (oget msg "name"))
-                                                 (oset! msg "name" (str orig-name @append-to-make-unique))
-                                                 (swap! append-to-make-unique inc)
-                                                 (reset! name-changed? true)
-                                                 (recur)))
-
-                                             ;; If the name had to be changed, we send a "rejectusername"
-                                             ;; message back to the user so they know their name has been
-                                             ;; altered by the server.
-                                             (when @name-changed?
-                                               (ocall connect :sendUTF (js/JSON.stringify #js {:id   (oget msg "id")
-                                                                                               :type "rejectusername"
-                                                                                               :name (oget msg "name")})))
-
-                                             ;; Set this connection's final username and send out the
-                                             ;; updated user list to all users. Yeah, we're sending a full
-                                             ;; list instead of just updating. It's horribly inefficient
-                                             ;; but this is a demo. Don't do this in a real app.
-                                             (oset! connect "username" (oget msg "name"))
-                                             (send-user-list-to-all)
-                                             (reset! send-to-clients false))
-                                "default")
-
-                              ;; Convert the revised message back to JSON and send it out
-                              ;; to the specified client or all clients, as appropriate. We
-                              ;; pass through any messages not specifically handled
-                              ;; in the select block above. This allows the clients to
-                              ;; exchange signaling and other control objects unimpeded.
-
-                              (when @send-to-clients
-                                (let [msg-string (js/JSON.stringify msg)]
-
-                                  ;; If the message specifies a target username, only send the
-                                  ;; message to them. Otherwise, send it to every user.
-                                  (if-not (clojure.string/blank? (oget msg "target"))
-                                    (send-to-one-user (oget msg "target") msg-string)
-                                    (mapv #(ocall % :sendUTF msg-string) connection-array))))))))
-
-                 ;; Handle the WebSocket "close" event; this means a user has logged off
-                 ;; or has been disconnected.
-                 (ocall connection :on "close"
-                        (fn [reason description]
-                          ;; First, remove the connection from the list of connections.
-                          (reset! connection-array (filterv #(oget % "connected") @connection-array))
-
-                          ;; Now send the updated user list. Again, please don't do this in a
-                          ;; real application. Your users won't like you very much.
-                          (send-user-list-to-all)
-
-                          ;; Build and output log output for close information.
-
-                          (log "Connection closed: " (oget connection "remoteAddress") " (" reason
-                               (if (clojure.string/blank? description) "" (str ": " description)) ")")))))))))
-
-(defn reload! []
+(defn reload!
+  []
   (println "Code updated."))
 
-(defn main! []
+(defn main!
+  []
   (start))
