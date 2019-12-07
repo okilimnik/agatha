@@ -7,7 +7,5 @@
                  [datascript "0.18.7"]
                  [reagent "0.9.0-rc2"]
                  [re-frame "0.11.0-rc2"]
-                 [clj-commons/secretary "1.2.4"]
-                 [venantius/accountant "0.2.5"]
                  [binaryage/oops "0.7.0"]]
   :source-paths ["frontend/src" "backend/src"])

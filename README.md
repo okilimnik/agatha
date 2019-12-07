@@ -26,7 +26,13 @@ In one shell:
 ```
 cd backend && shadow-cljs watch app
 ```
-In second shell after shadow-cljs compiles:
+In another shell after shadow-cljs compiles:
 ```
 cd backend && node index.js
 ```
+
+### Run client
+```
+cd frontend && shadow-cljs watch app
+```
+After shadow-cljs compiles open [browser](http://localhost:8020)

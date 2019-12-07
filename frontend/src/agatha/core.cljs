@@ -4,7 +4,7 @@
                 [agatha.ui.events]
                 [agatha.ui.subs]
                 [agatha.ui.views :as views]
-                [agatha.ui.routes :as routes]))
+                ["webrtc-adapter" :refer [adapter]]))
 
 (defn ^:dev/after-load mount-root []
       (re-frame/clear-subscription-cache!)
@@ -13,7 +13,6 @@
 
 (defn ^:export init []
       (re-frame/dispatch-sync [:initialize-db])
-      (routes/app-routes re-frame/dispatch)
       (mount-root))
 
 (defn  stop []

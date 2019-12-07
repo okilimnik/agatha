@@ -1,39 +1,31 @@
 (ns agatha.ui.views
   (:require [reagent.core :as r]
-            [agatha.ui.routes :as routes]
-            [re-frame.core :refer [subscribe]]))
+            [re-frame.core :refer [subscribe]]
+            [agatha.net :refer [connect hang-up-call]]))
 
-(defn page-view [{:keys [header content]}]
-  [:div.page-wrapper
-   [:header
-    [:a.logo {:href (routes/home)} "Home"]
-    [:h1 "Demo"]]
-   [:main content]])
+(defn handle-key [event]
+  nil)
 
-(defn about []
-  [page-view
-   {:content "This is about it."}])
-
-(defn home []
-  (let [keypair (atom nil)]
-    (r/create-class
-      {:component-did-mount
-       (fn []
-         ;(reset! keypair (wallet/create))
-         ;(prn (wallet/sign "some bananas" @keypair))
-         ;(prn (wallet/verify "some bananas" @keypair (wallet/sign "some bananas" @keypair)))
-         )
-       :reagent-render
-       (fn []
-         [page-view
-          {:content [:a {:href (routes/about)} "Learn More"]}])})))
-
-(defn app-view [{:keys [page-id]}]
-  (case page-id
-    :home
-    [home]
-    :about
-    [about]))
+(defn handle-send-button []
+  nil)
 
 (defn app-root []
-  (app-view @(subscribe [:app-view])))
+  [:div.container
+   [:div.infobox
+    [:p "This is a simple chat system implemented using WebSockets. It works by sending packets of JSON back and forth with the server."
+     [:a {:href "https://github.com/mdn/samples-server/tree/master/s/webrtc-from-chat"}] "Check out the source</a> on Github."]
+    [:p.mdn-disclaimer "This text and audio/video chat example is offered as-is for demonstration purposes only, and should not be used for any other purpose."]
+    [:p "Click a username in the user list to ask them to enter a one-on-one video chat with you."]
+    [:p "Enter a username:"
+     [:input {:id "name" :type "text" :maxlength "12" :required true :autocomplete "username" :inputmode "verbatim" :placeholder "Username"}]
+     [:input {:type "button" :name "login" :value "Log in" :onclick connect}]]]
+   [:ul.userlistbox]
+   [:div.chatbox]
+   [:div.camerabox
+    [:video {:id "received_video" :autoplay true}]
+    [:video {:id "local_video" :autoplay true :muted true}]
+    [:button {:id "hangup_button" :onclick hang-up-call :role "button" :disabled true} "Hang Up"]]
+   [:div.empty-container]
+   [:div.chat-controls "Chat:" [:br]
+    [:input {:id "text" :type "text" :name "text" :size "100" :maxlength "256" :placeholder "Say something meaningful..." :autocomplete "off" :onkeyup handle-key :disabled true}]
+    [:input {:type "button" :id "send" :name "send" :value "Send" :onclick handle-send-button :disabled true}]]])
