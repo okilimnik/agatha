@@ -246,8 +246,7 @@
   (reset! ws-server (server. #js {:httpServer            @web-server
                                   :autoAcceptConnections false}))
 
-  (when-not @ws-server
-    (log "ERROR: Unable to create WebSocket server!"))
+  (when-not @ws-server (log "ERROR: Unable to create WebSocket server!"))
 
   (ocall @ws-server :on "request" on-request))
 

@@ -20,3 +20,13 @@ Proof of Elapsed Time (PoET)
 ## Development
 Made with shadow-cljs.
 Please refer to the full [User Guide](https://shadow-cljs.github.io/docs/UsersGuide.html) for more information.
+
+### Run server
+In one shell:
+```
+cd backend && shadow-cljs watch app
+```
+In second shell after shadow-cljs compiles:
+```
+cd backend && node index.js
+```
