@@ -87,6 +87,10 @@
   (ocall response :end))
 
 (defn on-message
+  "Set up a handler for the 'message' event received over WebSocket. This
+  is a message sent by a client, and may be text to share with other
+  users, a private message (text or signaling) for one user, or a command
+  to the server."
   [message]
   (when (= (oget message "type") "utf8")
     (log "Received Message: " (oget message "utf8Data"))
@@ -114,6 +118,7 @@
 
                      ;; Ensure the name is unique by appending a number to it
                      ;; if it's not; keep trying that until it works.
+
                      (loop []
                        (when-not (is-username-unique? (oget msg "name"))
                          (oset! msg "name" (str orig-name @append-to-make-unique))
@@ -124,6 +129,7 @@
                      ;; If the name had to be changed, we send a "rejectusername"
                      ;; message back to the user so they know their name has been
                      ;; altered by the server.
+
                      (when @name-changed?
                        (ocall connect :sendUTF (js/JSON.stringify #js {:id   (oget msg "id")
                                                                        :type "rejectusername"
@@ -133,6 +139,7 @@
                      ;; updated user list to all users. Yeah, we're sending a full
                      ;; list instead of just updating. It's horribly inefficient
                      ;; but this is a demo. Don't do this in a real app.
+
                      (oset! connect "username" (oget msg "name"))
                      (send-user-list-to-all)
                      (reset! send-to-clients false))
@@ -149,17 +156,23 @@
 
           ;; If the message specifies a target username, only send the
           ;; message to them. Otherwise, send it to every user.
+
           (if-not (clojure.string/blank? (oget msg "target"))
             (send-to-one-user (oget msg "target") msg-string)
             (mapv #(ocall % :sendUTF msg-string) connection-array)))))))
 
 (defn on-close
+  "Handle the WebSocket 'close' event; this means a user has logged off
+  or has been disconnected."
   [connection reason description]
+
   ;; First, remove the connection from the list of connections.
+
   (reset! connection-array (filterv #(oget % "connected") @connection-array))
 
   ;; Now send the updated user list. Again, please don't do this in a
   ;; real application. Your users won't like you very much.
+
   (send-user-list-to-all)
 
   ;; Build and output log output for close information.
@@ -168,6 +181,9 @@
        (if (clojure.string/blank? description) "" (str ": " description)) ")"))
 
 (defn on-request
+  "Set up a 'connect' message handler on our WebSocket server. This is
+  called whenever a user connects to the server's port using the
+  WebSocket protocol."
   [request]
   (let [origin (oget request "origin")]
     (if-not (origin-is-allowed? origin)
@@ -191,15 +207,7 @@
 
         (ocall connection :sendUTF (js/JSON.stringify #js {:type "id" :id (oget connection "clientID")}))
 
-        ;; Set up a handler for the "message" event received over WebSocket. This
-        ;; is a message sent by a client, and may be text to share with other
-        ;; users, a private message (text or signaling) for one user, or a command
-        ;; to the server.
-
         (ocall connection :on "message" on-message)
-
-        ;; Handle the WebSocket "close" event; this means a user has logged off
-        ;; or has been disconnected.
         (ocall connection :on "close" (partial on-close connection))))))
 
 (defn start
@@ -240,10 +248,6 @@
 
   (when-not @ws-server
     (log "ERROR: Unable to create WebSocket server!"))
-
-  ;; Set up a "connect" message handler on our WebSocket server. This is
-  ;; called whenever a user connects to the server's port using the
-  ;; WebSocket protocol.
 
   (ocall @ws-server :on "request" on-request))
 
