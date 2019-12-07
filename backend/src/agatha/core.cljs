@@ -219,13 +219,14 @@
   (try
     (when-not (empty? @https-options)
       (reset! web-server (ocall https :createServer (clj->js @https-options) handle-web-request)))
-    (catch js/Error e (reset! web-server nil)))
+    (catch js/Error e (do (reset! web-server nil)
+                          (log "Error attempting to create HTTPS server: " (ocall e :toString)))))
 
   (when-not @web-server
     (try
       (reset! web-server (ocall http :createServer #js {} handle-web-request))
       (catch js/Error e (do (reset! web-server nil)
-                            (log "Error attempting to create HTTP(s) server: " (ocall e :toString))))))
+                            (log "Error attempting to create HTTP server: " (ocall e :toString))))))
 
   ;; Spin up the HTTPS server on the port assigned to this sample.
   ;; This will be turned into a WebSocket port very shortly.
