@@ -1,9 +1,15 @@
 (ns agatha.net
   (:require [oops.core :refer [ocall oset! oget]]
-            [cljs.reader :as edn]))
+            [cljs.reader :as edn]
+            [clojure.core.async :refer [go]]))
 
 (def connection (atom nil))
 (def client-id (atom nil))
+(def client-username (atom nil))
+(def target-username (atom nil))
+(def peer-connection (atom nil))
+(def transceiver (atom nil))
+(def webcam-stream (atom nil))
 
 (defn log
   "Output logging information to console"
@@ -14,6 +20,13 @@
   "Output an error information to console"
   [& args]
   (js/console.trace (str "[" (.toLocaleTimeString (js/Date.)) "] " (apply str args))))
+
+(defn report-error
+  "Handles reporting errors. Currently, we just dump stuff to console but
+  in a real-world application, an appropriate (and user-friendly)
+  error message should be displayed."
+  [err-message]
+  (log-error "Error " (oget err-message "name") ": " (oget err-message "message")))
 
 (defn send-to-server
   "Send a JavaScript object by converting it to JSON and sending\n
@@ -29,7 +42,8 @@
   this function sends a 'username' message to set our username for this
   session."
   []
-  (send-to-server #js {:name (oget (ocall js/document :getElementById "name") "value")
+  (reset! client-username (oget (ocall js/document :getElementById "name") "value"))
+  (send-to-server #js {:name @client-username
                        :date (js/Date.now)
                        :id   @client-id
                        :type "username"}))
@@ -107,7 +121,7 @@
   []
   (send-to-server #js {:text (oget (ocall js/document :getElementById "text") "value")
                        :type "message"
-                       :id @client-id
+                       :id   @client-id
                        :date (js/Date.now)})
   (oset! (oget (ocall js/document :getElementById "text") "value") ""))
 
@@ -125,15 +139,113 @@
   "Called by the WebRTC layer to let us know when it's time to
   begin, resume, or restart ICE negotiation."
   []
-  (log "*** Negotiation needed"))
+  (log "*** Negotiation needed")
 
-(def options #js {                                          ;:ordered              false      ;; If the data channel should guarantee order or not
+  (try
+    (do (log "---> Creating offer")
+        (-> peer-connection
+            (.createOffer)
+            (.then (fn [offer]
+                     ;;  If the connection hasn't yet achieved the "stable" state,
+                     ;; return to the caller. Another negotiationneeded event
+                     ;; will be fired when the state stabilizes.
+                     (if-not (= (oget peer-connection "signalingState" "stable"))
+                       (log "     -- The connection isn't stable yet; postponing...")
+
+                       ;; Establish the offer as the local peer's current
+                       ;; description
+                       (do (log "---> Setting local description to the offer")
+                           (-> peer-connection
+                               (.setLocalDescription offer)
+                               (.then (fn []
+                                        ;; Send the offer to the remote peer.
+                                        (log "---> Sending the offer to the remote peer")
+                                        (send-to-server #js {:name   @client-username
+                                                             :target @target-username
+                                                             :type   "video-offer"
+                                                             :sdp    (oget @peer-connection "localDescription")}))))))))
+            (.catch (fn [err]
+                      (log "*** The following error occurred while handling the negotiationneeded event:")
+                      (report-error err)))))))
+
+(defn handle-track-event
+  "Called by the WebRTC layer when events occur on the media tracks
+   on our WebRTC call. This includes when streams are added to and
+   removed from the call.
+
+   track events include the following fields:
+
+   RTCRtpReceiver       receiver
+   MediaStreamTrack     track
+   MediaStream[]        streams
+   RTCRtpTransceiver    transceiver
+
+   In our case, we're just taking the first stream found and attaching
+   it to the <video> element for incoming media."
+  [event]
+  (log "*** Track event")
+  (oset! (oget (ocall js/document :getElementById "received_video") "srcObject") (nth (oget event "streams") 0))
+  (oset! (oget (ocall js/document :getElementById "hangup_button") "disabled") false))
+
+(defn handle-ice-candidate-event
+  "Handles |icecandidate| events by forwarding the specified
+  ICE candidate (created by our local ICE agent) to the other
+  peer through the signaling server."
+  [event]
+  (when (oget event "candidate")
+    (log "*** Outgoing ICE candidate: " (oget event "candidate.candidate"))
+
+    (send-to-server #js {:type      "new-ice-candidate"
+                         :target    @target-username
+                         :candidate (oget event "candidate")})))
+
+(defn handle-ice-connection-state-change-event
+  "Handle |iceconnectionstatechange| events. This will detect
+  when the ICE connection is closed, failed, or disconnected.
+
+  This is called when the state of the ICE agent changes."
+  [_]
+  (let [state (oget @peer-connection "iceConnectionState")]
+    (log "*** ICE connection state changed to " state)
+
+    (when (or (= state "closed")
+              (= state "failed")
+              (= state "disconnected"))
+      (close-video-call))))
+
+(defn handle-signaling-state-change-event
+  "Set up a |signalingstatechange| event handler. This will detect when
+  the signaling connection is closed.
+
+  NOTE: This will actually move to the new RTCPeerConnectionState enum
+  returned in the property RTCPeerConnection.connectionState when
+  browsers catch up with the latest version of the specification!"
+  [_]
+  (let [state (oget @peer-connection "signalingState")]
+    (log "*** WebRTC signaling state changed to: " state)
+    (when (= state "closed")
+      (close-video-call))))
+
+(defn handle-ice-gathering-state-change-event
+  "Handle the |icegatheringstatechange| event. This lets us know what the
+  ICE engine is currently working on: 'new' means no networking has happened
+  yet, 'gathering' means the ICE engine is currently gathering candidates,
+  and 'complete' means gathering is complete. Note that the engine can
+  alternate between 'gathering' and 'complete' repeatedly as needs and
+  circumstances change.
+
+  We don't need to do anything when this happens, but we log it to the
+  console so you can see what's going on when playing with the sample."
+  [_]
+  (log "*** ICE gathering state changed to: " (oget @peer-connection "iceGatheringState")))
+
+(def options #js {;:ordered              false      ;; If the data channel should guarantee order or not
                   ;:maxPacketLifeTime    3000       ;; The maximum time to try and retransmit a failed message
                   ;:maxRetransmits    5                      ;; The maximum number of times to try and retransmit a failed message
                   ;:protocol          "?"                    ;; Allows a subprotocol to be used which provides meta information towards the application
                   ;:negotiated        false                  ;;  If set to true, it removes the automatic setting up of a data channel on the other peer, meaning that you are provided your own way to create a data channel with the same id on the other side
                   ;:id                "?"                    ;; Allows you to provide your own ID for the channel (can only be used in combination with negotiated set to true)
-                  :iceServers           #js ["stun:stun.l.google.com:19302"]
+                  :iceServers #js ["stun:stun.l.google.com:19302"]
                   ;:iceTransportPolicy   "all"      ;; "relay"
                   ;:iceCandidatePoolSize 5          ;; 0 - 10
                   })
@@ -145,20 +257,19 @@
   use in our video call. Then we configure event handlers to get
   needed notifications on the call."
   []
-  (log "Setting up a connection...")
+  (go
+    (log "Setting up a connection...")
 
-  ;; Create an RTCPeerConnection which knows to use our chosen
-  ;; STUN server.
+    ;; Create an RTCPeerConnection which knows to use our chosen
+    ;; STUN server.
 
-  (let [peer-connection (js/RTCPeerConnection. options)]
+    (reset! peer-connection (js/RTCPeerConnection. options))
 
     ;; Set up event handlers for the ICE negotiation process.
 
-    (oset! (oget peer-connection "onicecandidate") (handle-ice-candidate-event))
-    (oset! (oget peer-connection "oniceconnectionstatechange") (handle-ice-connection-state-change-event))
-    (oset! (oget peer-connection "onicegatheringstatechange") (handle-ice-gathering-state-change-event))
-    (oset! (oget peer-connection "onsignalingstatechange") (handle-signaling-state-change-event))
-    (oset! (oget peer-connection "onnegotiationneeded") (handle-negotiation-needed-event))
-    (oset! (oget peer-connection "ontrack") (handle-track-event))
-    )
-  )
+    (oset! (oget peer-connection "onicecandidate") handle-ice-candidate-event)
+    (oset! (oget peer-connection "oniceconnectionstatechange") handle-ice-connection-state-change-event)
+    (oset! (oget peer-connection "onicegatheringstatechange") handle-ice-gathering-state-change-event)
+    (oset! (oget peer-connection "onsignalingstatechange") handle-signaling-state-change-event)
+    (oset! (oget peer-connection "onnegotiationneeded") handle-negotiation-needed-event)
+    (oset! (oget peer-connection "ontrack") handle-track-event)))

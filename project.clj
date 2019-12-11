@@ -4,6 +4,7 @@
   :url "http://example.com/FIXME"
   :dependencies [[org.clojure/clojure "1.10.1"]
                  [org.clojure/clojurescript "1.10.597"]
+                 [org.clojure/core.async "0.6.532"]
                  [datascript "0.18.7"]
                  [reagent "0.9.0-rc2"]
                  [re-frame "0.11.0-rc2"]
