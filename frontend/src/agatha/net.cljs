@@ -48,6 +48,87 @@
                        :id   @client-id
                        :type "username"}))
 
+(defn handle-userlist-msg
+  "Given a message containing a list of usernames, this function
+  populates the user list box with those names, making each item
+  clickable to allow starting a video call."
+  [msg]
+  ;; TODO: implement in reagent/re-frame style
+  nil)
+
+(defn close-video-call
+  "Close the RTCPeerConnection and reset variables so that the user can
+  make or receive another call if they wish. This is called both
+  when the user hangs up, the other user hangs up, or if a connection
+  failure is detected."
+  []
+  (let [local-video (ocall js/document :getElementById "local_video")]
+
+    (log "Closing the call")
+
+    ;; Close the RTCPeerConnection
+
+    (when @peer-connection
+      (log "--> Closing the peer connection")
+
+      ;; Disconnect all our event listeners; we don't want stray events
+      ;; to interfere with the hangup while it's ongoing.
+
+      (oset! (oget @peer-connection "onicecandidate") nil)
+      (oset! (oget @peer-connection "oniceconnectionstatechange") nil)
+      (oset! (oget @peer-connection "onicegatheringstatechange") nil)
+      (oset! (oget @peer-connection "onsignalingstatechange") nil)
+      (oset! (oget @peer-connection "onnegotiationneeded") nil)
+      (oset! (oget @peer-connection "ontrack") nil)
+
+      ;; Stop all transceivers on the connection
+
+      (-> @peer-connection
+          (ocall :getTransceivers)
+          (ocall :forEach #(ocall % :stop)))
+
+      ;; Stop the webcam preview as well by pausing the <video>
+      ;; element, then stopping each of the getUserMedia() tracks
+      ;; on it.
+
+      (when (oget local-video "srcObject")
+        (ocall local-video :pause)
+        (-> (oget local-video "srcObject")
+            (ocall :getTracks)
+            (ocall :forEach #(ocall % :stop))))
+
+      ;; Close the peer connection
+
+      (ocall @peer-connection :close)
+      (reset! peer-connection nil)
+      (reset! webcam-stream nil))
+
+    ;; Disable the hangup button
+
+    (oset! (oget (ocall js/document :getElementById "hangup_button") "disabled") true)
+    (reset! target-username nil)))
+
+(defn handle-hang-up-msg
+  "Handle the 'hang-up' message, which is sent if the other peer
+  has hung up the call or otherwise disconnected."
+  [_]
+  (log "*** Received hang up notification from other peer")
+
+  (close-video-call))
+
+(defn hang-up-call
+  "Hang up the call by closing our end of the connection, then
+  sending a 'hang-up' message to the other peer (keep in mind that
+  the signaling is done on a different connection). This notifies
+  the other peer that the connection should be terminated and the UI
+  returned to the 'no call in progress' state."
+  []
+  (close-video-call)
+
+  (send-to-server #js {:name @client-username
+                       :target @target-username
+                       :type "hang-up"}))
+
 (defn on-message [text evt]
   (let [msg (js/JSON.parse (oget evt "data"))]
     (log "Message received: ")
@@ -112,9 +193,6 @@
       (oset! (oget chat-box "innerHTML") (str (oget chat-box "innerHTML") @text))
       (oset! (oget chat-box "scrollTop") (- (oget chat-box "scrollHeight") (oget chat-box "clientHeight"))))))
 
-(defn hang-up-call []
-  nil)
-
 (defn handle-send-button
   "Handles a click on the Send button (or pressing return/enter) by
   building a 'message' object and sending it to the server."
@@ -144,29 +222,29 @@
   (try
     (do (log "---> Creating offer")
         (-> peer-connection
-            (.createOffer)
-            (.then (fn [offer]
-                     ;;  If the connection hasn't yet achieved the "stable" state,
-                     ;; return to the caller. Another negotiationneeded event
-                     ;; will be fired when the state stabilizes.
-                     (if-not (= (oget peer-connection "signalingState" "stable"))
-                       (log "     -- The connection isn't stable yet; postponing...")
+            (ocall :createOffer)
+            (ocall :then (fn [offer]
+                           ;;  If the connection hasn't yet achieved the "stable" state,
+                           ;; return to the caller. Another negotiationneeded event
+                           ;; will be fired when the state stabilizes.
+                           (if-not (= (oget peer-connection "signalingState" "stable"))
+                             (log "     -- The connection isn't stable yet; postponing...")
 
-                       ;; Establish the offer as the local peer's current
-                       ;; description
-                       (do (log "---> Setting local description to the offer")
-                           (-> peer-connection
-                               (.setLocalDescription offer)
-                               (.then (fn []
-                                        ;; Send the offer to the remote peer.
-                                        (log "---> Sending the offer to the remote peer")
-                                        (send-to-server #js {:name   @client-username
-                                                             :target @target-username
-                                                             :type   "video-offer"
-                                                             :sdp    (oget @peer-connection "localDescription")}))))))))
-            (.catch (fn [err]
-                      (log "*** The following error occurred while handling the negotiationneeded event:")
-                      (report-error err)))))))
+                             ;; Establish the offer as the local peer's current
+                             ;; description
+                             (do (log "---> Setting local description to the offer")
+                                 (-> peer-connection
+                                     (ocall :setLocalDescription offer)
+                                     (ocall :then (fn []
+                                                    ;; Send the offer to the remote peer.
+                                                    (log "---> Sending the offer to the remote peer")
+                                                    (send-to-server #js {:name   @client-username
+                                                                         :target @target-username
+                                                                         :type   "video-offer"
+                                                                         :sdp    (oget @peer-connection "localDescription")}))))))))
+            (ocall :catch (fn [err]
+                            (log "*** The following error occurred while handling the negotiationneeded event:")
+                            (report-error err)))))))
 
 (defn handle-track-event
   "Called by the WebRTC layer when events occur on the media tracks
@@ -267,9 +345,9 @@
 
     ;; Set up event handlers for the ICE negotiation process.
 
-    (oset! (oget peer-connection "onicecandidate") handle-ice-candidate-event)
-    (oset! (oget peer-connection "oniceconnectionstatechange") handle-ice-connection-state-change-event)
-    (oset! (oget peer-connection "onicegatheringstatechange") handle-ice-gathering-state-change-event)
-    (oset! (oget peer-connection "onsignalingstatechange") handle-signaling-state-change-event)
-    (oset! (oget peer-connection "onnegotiationneeded") handle-negotiation-needed-event)
-    (oset! (oget peer-connection "ontrack") handle-track-event)))
+    (oset! (oget @peer-connection "onicecandidate") handle-ice-candidate-event)
+    (oset! (oget @peer-connection "oniceconnectionstatechange") handle-ice-connection-state-change-event)
+    (oset! (oget @peer-connection "onicegatheringstatechange") handle-ice-gathering-state-change-event)
+    (oset! (oget @peer-connection "onsignalingstatechange") handle-signaling-state-change-event)
+    (oset! (oget @peer-connection "onnegotiationneeded") handle-negotiation-needed-event)
+    (oset! (oget @peer-connection "ontrack") handle-track-event)))
