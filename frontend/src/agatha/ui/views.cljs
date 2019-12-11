@@ -1,13 +1,7 @@
 (ns agatha.ui.views
   (:require [reagent.core :as r]
             [re-frame.core :refer [subscribe]]
-            [agatha.net :refer [connect hang-up-call]]))
-
-(defn handle-key [event]
-  nil)
-
-(defn handle-send-button []
-  nil)
+            [agatha.net :refer [connect hang-up-call handle-key handle-send-button]]))
 
 (defn app-root []
   [:div.container
