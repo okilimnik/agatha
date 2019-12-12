@@ -1,7 +1,9 @@
 (ns agatha.net
   (:require [oops.core :refer [ocall oset! oget]]
             [cljs.reader :as edn]
-            [clojure.core.async :refer [go]]))
+            [promesa.core :as p]
+            [promesa.async-cljs :refer-macros [async]]
+            [agatha.util :refer [await->]]))
 
 (def connection (atom nil))
 (def client-id (atom nil))
@@ -10,6 +12,12 @@
 (def peer-connection (atom nil))
 (def transceiver (atom nil))
 (def webcam-stream (atom nil))
+
+(def media-constraints #js {:audio true                     ;;We want an audio track
+                            :video #js {:aspectRatio #js {:ideal 1.333333}}}) ;; 3:2 aspect is preferred
+
+(declare create-peer-connection)
+(declare invite)
 
 (defn log
   "Output logging information to console"
@@ -53,8 +61,25 @@
   populates the user list box with those names, making each item
   clickable to allow starting a video call."
   [msg]
-  ;; TODO: implement in reagent/re-frame style
-  nil)
+  (let [list-item (-> js/document
+                      (ocall :querySelector ".userlistbox"))]
+
+    ;; Remove all current list members. We could do this smarter,
+    ;; by adding and updating users instead of rebuilding from
+    ;; scratch but this will do for this sample.
+
+    (while (oget list-item "firstChild")
+      (ocall list-item :removeChild (oget list-item "firstChild")))
+
+    ;; Add member names from the received list.
+
+    (-> (oget msg "users")
+        (ocall :forEach
+               (fn [username]
+                 (let [item (ocall js/document :createElement "li")]
+                   (ocall item :appendChild (ocall js/document :createTextNode username))
+                   (ocall item :addEventListener "click" invite false)
+                   (ocall list-item :appendChild item)))))))
 
 (defn close-video-call
   "Close the RTCPeerConnection and reset variables so that the user can
@@ -108,6 +133,26 @@
     (oset! (oget (ocall js/document :getElementById "hangup_button") "disabled") true)
     (reset! target-username nil)))
 
+(defn handle-get-user-media-error
+  "Handle errors which occur when trying to access the local media
+  hardware; that is, exceptions thrown by getUserMedia(). The two most
+  likely scenarios are that the user has no camera and/or microphone
+  or that they declined to share their equipment when prompted. If
+  they simply opted not to share their media, that's not really an
+  error, so we won't present a message in that situation."
+  [e]
+  (log-error e)
+  (case (oget e "name")
+    "NotFoundError" (js/alert "Unable to open your call because no camera and/or microphone were found.")
+    "SecurityError" nil                                     ;; Do nothing; this is the same as the user canceling the call.
+    "PermissionDeniedError" nil                             ;; Do nothing; this is the same as the user canceling the call.
+    (js/alert (str "Error opening your camera and/or microphone: " (oget e "message"))))
+
+  ;; Make sure we shut down our end of the RTCPeerConnection so we're
+  ;; ready to try again.
+
+  (close-video-call))
+
 (defn handle-hang-up-msg
   "Handle the 'hang-up' message, which is sent if the other peer
   has hung up the call or otherwise disconnected."
@@ -125,9 +170,112 @@
   []
   (close-video-call)
 
-  (send-to-server #js {:name @client-username
+  (send-to-server #js {:name   @client-username
                        :target @target-username
-                       :type "hang-up"}))
+                       :type   "hang-up"}))
+
+(defn handle-video-offer-msg
+  "Accept an offer to video chat. We configure our local settings,
+  create our RTCPeerConnection, get and attach our local camera
+  stream, then create and send an answer to the caller."
+  [msg]
+  (async
+    (reset! target-username (oget msg "name"))
+
+    ;; If we're not already connected, create an RTCPeerConnection
+    ;; to be linked to the caller.
+
+    (log "Received video chat offer from " @target-username)
+    (when-not @peer-connection
+      (create-peer-connection))
+
+    ;; We need to set the remote description to the received SDP offer
+    ;; so that our local WebRTC layer knows how to talk to the caller.
+
+    (let [desc (js/RTCSessionDescription. (oget msg "sdp"))]
+
+      ;; If the connection isn't stable yet, wait for it...
+
+      (if-not (= (oget @peer-connection "signalingState") "stable")
+        (do (log "  - But the signaling state isn't stable, so triggering rollback")
+
+            ;; Set the local and remove descriptions for rollback; don't proceed
+            ;; until both return.
+
+            (await-> js/Promise
+                     (ocall :all #js [(-> @peer-connection
+                                          (ocall :setLocalDescription #js {:type "rollback"}))
+                                      (-> @peer-connection
+                                          (ocall :setRemoteDescription desc))])))
+
+        (do (log "  - Setting remote description")
+            (await-> @peer-connection
+                     (ocall :setRemoteDescription desc))
+
+            ;; Get the webcam stream if we don't already have it
+
+            (when-not @webcam-stream
+              (try
+                (reset! webcam-stream (await-> (oget js/navigator "mediaDevices")
+                                               (ocall :getUserMedia media-constraints)))
+                (catch js/Error e (handle-get-user-media-error e)))
+
+              (-> js/document
+                  (ocall :getElementById "local_video")
+                  (oget "srcObject")
+                  (oset! @webcam-stream))
+
+              ;; Add the camera stream to the RTCPeerConnection
+
+              (try
+                (-> @webcam-stream
+                    (ocall :getTracks)
+                    (ocall :forEach
+                           (fn [track]
+                             (reset! transceiver track)
+                             (-> @peer-connection
+                                 (ocall :addTransceiver track #js {:streams #js [@webcam-stream]})))))
+                (catch js/Error e (handle-get-user-media-error e)))
+
+              (log "---> Creating and sending answer to caller")
+
+              (await-> @peer-connection
+                       (ocall :setLocalDescription (await-> @peer-connection
+                                                            (ocall :createAnswer))))
+
+              (send-to-server #js {:name @client-username
+                                   :target @target-username
+                                   :type "video-answer"
+                                   :sdp (oget @peer-connection "localDescription")})))))))
+
+(defn handle-video-answer-msg
+  "Responds to the 'video-answer' message sent to the caller
+  once the callee has decided to accept our request to talk."
+  [msg]
+  (async
+    (log "*** Call recipient has accepted our call")
+
+    ;; Configure the remote description, which is the SDP payload
+    ;; in our "video-answer" message.
+
+    (try
+      (await-> @peer-connection
+               (ocall :setRemoteDescription (js/RTCSessionDescription. (oget msg "sdp"))))
+      (catch js/Error e (report-error e)))))
+
+(defn handle-new-ice-candidate-msg
+  "A new ICE candidate has been received from the other peer. Call
+  RTCPeerConnection.addIceCandidate() to send it along to the
+  local ICE framework."
+  [msg]
+  (async
+    (let [candidate (js/RTCIceCandidate. (oget msg "candidate"))]
+
+      (log "*** Adding received ICE candidate: " (js/JSON.stringify candidate))
+      (try
+        (await-> @peer-connection
+                 (ocall :addIceCandidate candidate))
+        (catch js/Error e (report-error e))))))
 
 (defn on-message [text evt]
   (let [msg (js/JSON.parse (oget evt "data"))]
@@ -217,34 +365,32 @@
   "Called by the WebRTC layer to let us know when it's time to
   begin, resume, or restart ICE negotiation."
   []
-  (log "*** Negotiation needed")
+  (async
+    (log "*** Negotiation needed")
 
-  (try
-    (do (log "---> Creating offer")
-        (-> peer-connection
-            (ocall :createOffer)
-            (ocall :then (fn [offer]
-                           ;;  If the connection hasn't yet achieved the "stable" state,
-                           ;; return to the caller. Another negotiationneeded event
-                           ;; will be fired when the state stabilizes.
-                           (if-not (= (oget peer-connection "signalingState" "stable"))
-                             (log "     -- The connection isn't stable yet; postponing...")
+    (try
+      (do (log "---> Creating offer")
+          (let [offer (await-> @peer-connection
+                               (ocall :createOffer))]
+            ;;  If the connection hasn't yet achieved the "stable" state,
+            ;; return to the caller. Another negotiationneeded event
+            ;; will be fired when the state stabilizes.
+            (if-not (= (oget peer-connection "signalingState" "stable"))
+              (log "     -- The connection isn't stable yet; postponing...")
 
-                             ;; Establish the offer as the local peer's current
-                             ;; description
-                             (do (log "---> Setting local description to the offer")
-                                 (-> peer-connection
-                                     (ocall :setLocalDescription offer)
-                                     (ocall :then (fn []
-                                                    ;; Send the offer to the remote peer.
-                                                    (log "---> Sending the offer to the remote peer")
-                                                    (send-to-server #js {:name   @client-username
-                                                                         :target @target-username
-                                                                         :type   "video-offer"
-                                                                         :sdp    (oget @peer-connection "localDescription")}))))))))
-            (ocall :catch (fn [err]
-                            (log "*** The following error occurred while handling the negotiationneeded event:")
-                            (report-error err)))))))
+              ;; Establish the offer as the local peer's current
+              ;; description
+              (do (log "---> Setting local description to the offer")
+                  (await-> @peer-connection
+                           (ocall :setLocalDescription offer))
+                  ;; Send the offer to the remote peer.
+                  (log "---> Sending the offer to the remote peer")
+                  (send-to-server #js {:name   @client-username
+                                       :target @target-username
+                                       :type   "video-offer"
+                                       :sdp    (oget @peer-connection "localDescription")})))))
+      (catch js/Error e (do (log "*** The following error occurred while handling the negotiationneeded event:")
+                            (report-error e))))))
 
 (defn handle-track-event
   "Called by the WebRTC layer when events occur on the media tracks
@@ -335,7 +481,7 @@
   use in our video call. Then we configure event handlers to get
   needed notifications on the call."
   []
-  (go
+  (async
     (log "Setting up a connection...")
 
     ;; Create an RTCPeerConnection which knows to use our chosen
@@ -351,3 +497,59 @@
     (oset! (oget @peer-connection "onsignalingstatechange") handle-signaling-state-change-event)
     (oset! (oget @peer-connection "onnegotiationneeded") handle-negotiation-needed-event)
     (oset! (oget @peer-connection "ontrack") handle-track-event)))
+
+(defn invite
+  "Handle a click on an item in the user list by inviting the clicked
+  user to video chat. Note that we don't actually send a message to
+  the callee here -- calling RTCPeerConnection.addTrack() issues
+  a |notificationneeded| event, so we'll let our handler for that
+  make the offer."
+  [evt]
+  (async
+    (log "Starting to prepare an invitation")
+    (if @peer-connection
+      (js/alert "You can't start a call because you already have one open!")
+      (let [clicked-username (oget evt "target.textContent")]
+
+        ;; Don't allow users to call themselves, because weird.
+
+        (if (= clicked-username @client-username)
+          (js/alert "I'm afraid I can't let you talk to yourself. That would be weird.")
+          (do
+
+            ;; Record the username being called for future reference
+
+            (reset! target-username clicked-username)
+            (log "Inviting user " @target-username)
+
+            ;; Call createPeerConnection() to create the RTCPeerConnection.
+            ;; When this returns, peer-connection is our RTCPeerConnection
+            ;; and webcam-stream is a stream coming from the camera. They are
+            ;; not linked together in any way yet.
+
+            (log "Setting up connection to invite user: " @target-username)
+            (create-peer-connection)
+
+            ;; Get access to the webcam stream and attach it to the
+            ;; "preview" box (id "local_video").
+
+            (try
+              (do (reset! webcam-stream (await-> (oget js/navigator "mediaDevices")
+                                                 (ocall :getUserMedia media-constraints)))
+                  (-> js/document
+                      (ocall :getElementById "local_video")
+                      (oget "srcObject")
+                      (oset! @webcam-stream)))
+              (catch js/Error e (handle-get-user-media-error e)))
+
+            ;; Add the tracks from the stream to the RTCPeerConnection
+
+            (try
+              (-> @webcam-stream
+                  (ocall :getTracks)
+                  (ocall :forEach
+                         (fn [track]
+                           (reset! transceiver track)
+                           (-> @peer-connection
+                               (ocall :addTransceiver track #js {:streams #js [@webcam-stream]})))))
+              (catch js/Error e (handle-get-user-media-error e)))))))))
