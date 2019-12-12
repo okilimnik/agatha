@@ -109,8 +109,8 @@
 
       (case (oget msg "type")
         ;; Public, textual message
-        "message" (do (oset! msg "name" (oget connect "username"))
-                      (oset! msg "text" (clojure.string/replace (oget msg "text") #"/(<([^>]+)>)/ig" "")))
+        "message" (do (oset! msg :name (oget connect "username"))
+                      (oset! msg :text (clojure.string/replace (oget msg "text") #"/(<([^>]+)>)/ig" "")))
 
         ;; Username change
         "username" (let [name-changed? (atom false)
@@ -121,7 +121,7 @@
 
                      (loop []
                        (when-not (is-username-unique? (oget msg "name"))
-                         (oset! msg "name" (str orig-name @append-to-make-unique))
+                         (oset! msg :name (str orig-name @append-to-make-unique))
                          (swap! append-to-make-unique inc)
                          (reset! name-changed? true)
                          (recur)))
@@ -140,7 +140,7 @@
                      ;; list instead of just updating. It's horribly inefficient
                      ;; but this is a demo. Don't do this in a real app.
 
-                     (oset! connect "username" (oget msg "name"))
+                     (oset! connect :username (oget msg "name"))
                      (send-user-list-to-all)
                      (reset! send-to-clients false))
         "default")
@@ -199,7 +199,8 @@
         (log "Connection accepted from " + (oget connection "remoteAddress") + ".")
         (swap! connection-array conj connection)
 
-        (oset! connection "clientID" @next-id)
+        (log (js/JSON.stringify connection))
+        (oset! connection :clientID @next-id)
         (swap! next-id inc)
 
         ;; Send the new client its token; it send back a "username" message to

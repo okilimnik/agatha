@@ -2,13 +2,8 @@
   (:require [oops.core :refer [ocall oset! oget]]
             [cljs.reader :as edn]
             [promesa.core :as p]
-            [promesa.async-cljs :refer-macros [async]]))
-
-(defmacro await-> [thenable & thens]
-  `(-> ~thenable
-       ~@thens
-       ~'js/Promise.resolve
-       p/await))
+            [promesa.async-cljs :refer-macros [async]]
+            [agatha.util :refer [await->]]))
 
 (def connection (atom nil))
 (def client-id (atom nil))
@@ -340,7 +335,7 @@
     ;; If there's text to insert into the chat buffer, do so now, then
     ;; scroll the chat panel so that the new text is visible.
 
-    (when (oget @text "length")
+    (when-not (clojure.string/blank? @text)
       (oset! chat-box :innerHTML (str (oget chat-box "innerHTML") @text))
       (oset! chat-box :scrollTop (- (oget chat-box "scrollHeight") (oget chat-box "clientHeight"))))))
 

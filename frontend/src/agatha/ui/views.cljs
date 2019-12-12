@@ -11,15 +11,15 @@
     [:p.mdn-disclaimer "This text and audio/video chat example is offered as-is for demonstration purposes only, and should not be used for any other purpose."]
     [:p "Click a username in the user list to ask them to enter a one-on-one video chat with you."]
     [:p "Enter a username:"
-     [:input {:id "name" :type "text" :maxlength "12" :required true :autocomplete "username" :inputmode "verbatim" :placeholder "Username"}]
-     [:input {:type "button" :name "login" :value "Log in" :onclick connect}]]]
+     [:input {:id "name" :type "text" :maxLength "12" :required true :autoComplete "username" :inputMode "verbatim" :placeholder "Username"}]
+     [:input {:type "button" :name "login" :value "Log in" :onClick connect}]]]
    [:ul.userlistbox]
    [:div.chatbox]
    [:div.camerabox
-    [:video {:id "received_video" :autoplay true}]
-    [:video {:id "local_video" :autoplay true :muted true}]
-    [:button {:id "hangup_button" :onclick hang-up-call :role "button" :disabled true} "Hang Up"]]
+    [:video {:id "received_video" :autoPlay true}]
+    [:video {:id "local_video" :autoPlay true :muted true}]
+    [:button {:id "hangup_button" :onClick hang-up-call :role "button" :disabled true} "Hang Up"]]
    [:div.empty-container]
    [:div.chat-controls "Chat:" [:br]
-    [:input {:id "text" :type "text" :name "text" :size "100" :maxlength "256" :placeholder "Say something meaningful..." :autocomplete "off" :onkeyup handle-key :disabled true}]
-    [:input {:type "button" :id "send" :name "send" :value "Send" :onclick handle-send-button :disabled true}]]])
+    [:input {:id "text" :type "text" :name "text" :size "100" :maxLength "256" :placeholder "Say something meaningful..." :autoComplete "off" :onKeyUp handle-key :disabled true}]
+    [:input {:type "button" :id "send" :name "send" :value "Send" :onClick handle-send-button :disabled true}]]])
