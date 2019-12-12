@@ -2,8 +2,13 @@
   (:require [oops.core :refer [ocall oset! oget]]
             [cljs.reader :as edn]
             [promesa.core :as p]
-            [promesa.async-cljs :refer-macros [async]]
-            [agatha.util :refer [await->]]))
+            [promesa.async-cljs :refer-macros [async]]))
+
+(defmacro await-> [thenable & thens]
+  `(-> ~thenable
+       ~@thens
+       ~'js/Promise.resolve
+       p/await))
 
 (def connection (atom nil))
 (def client-id (atom nil))
@@ -99,12 +104,12 @@
       ;; Disconnect all our event listeners; we don't want stray events
       ;; to interfere with the hangup while it's ongoing.
 
-      (oset! (oget @peer-connection "onicecandidate") nil)
-      (oset! (oget @peer-connection "oniceconnectionstatechange") nil)
-      (oset! (oget @peer-connection "onicegatheringstatechange") nil)
-      (oset! (oget @peer-connection "onsignalingstatechange") nil)
-      (oset! (oget @peer-connection "onnegotiationneeded") nil)
-      (oset! (oget @peer-connection "ontrack") nil)
+      (oset! @peer-connection :onicecandidate nil)
+      (oset! @peer-connection :oniceconnectionstatechange nil)
+      (oset! @peer-connection :onicegatheringstatechange nil)
+      (oset! @peer-connection :onsignalingstatechange nil)
+      (oset! @peer-connection :onnegotiationneeded nil)
+      (oset! @peer-connection :ontrack nil)
 
       ;; Stop all transceivers on the connection
 
@@ -130,7 +135,7 @@
 
     ;; Disable the hangup button
 
-    (oset! (oget (ocall js/document :getElementById "hangup_button") "disabled") true)
+    (oset! (ocall js/document :getElementById "hangup_button") :disabled true)
     (reset! target-username nil)))
 
 (defn handle-get-user-media-error
@@ -222,8 +227,7 @@
 
               (-> js/document
                   (ocall :getElementById "local_video")
-                  (oget "srcObject")
-                  (oset! @webcam-stream))
+                  (oset! :srcObject @webcam-stream))
 
               ;; Add the camera stream to the RTCPeerConnection
 
@@ -240,8 +244,7 @@
               (log "---> Creating and sending answer to caller")
 
               (await-> @peer-connection
-                       (ocall :setLocalDescription (await-> @peer-connection
-                                                            (ocall :createAnswer))))
+                       (ocall :setLocalDescription (await-> (ocall @peer-connection :createAnswer))))
 
               (send-to-server #js {:name @client-username
                                    :target @target-username
@@ -327,19 +330,19 @@
         text (atom "")]
     (log "Connecting to server: " server-url)
     (reset! connection (js/WebSocket. server-url "json"))
-    (oset! (oget @connection "onopen")
+    (oset! @connection :onopen
            (fn [_]
-             (oset! (oget (ocall js/document :getElementById "text") "disabled") false)
-             (oset! (oget (ocall js/document :getElementById "send") "disabled") false)))
-    (oset! (oget @connection "onerror") #(js/console.dir %))
-    (oset! (oget @connection "onmessage") (partial on-message text))
+             (oset! (ocall js/document :getElementById "text") :disabled false)
+             (oset! (ocall js/document :getElementById "send") :disabled false)))
+    (oset! @connection :onerror #(js/console.dir %))
+    (oset! @connection :onmessage (partial on-message text))
 
     ;; If there's text to insert into the chat buffer, do so now, then
     ;; scroll the chat panel so that the new text is visible.
 
     (when (oget @text "length")
-      (oset! (oget chat-box "innerHTML") (str (oget chat-box "innerHTML") @text))
-      (oset! (oget chat-box "scrollTop") (- (oget chat-box "scrollHeight") (oget chat-box "clientHeight"))))))
+      (oset! chat-box :innerHTML (str (oget chat-box "innerHTML") @text))
+      (oset! chat-box :scrollTop (- (oget chat-box "scrollHeight") (oget chat-box "clientHeight"))))))
 
 (defn handle-send-button
   "Handles a click on the Send button (or pressing return/enter) by
@@ -349,7 +352,7 @@
                        :type "message"
                        :id   @client-id
                        :date (js/Date.now)})
-  (oset! (oget (ocall js/document :getElementById "text") "value") ""))
+  (oset! (ocall js/document :getElementById "text") :value ""))
 
 (defn handle-key
   "Handler for keyboard events. This is used to intercept the return and
@@ -370,8 +373,7 @@
 
     (try
       (do (log "---> Creating offer")
-          (let [offer (await-> @peer-connection
-                               (ocall :createOffer))]
+          (let [offer (await-> (ocall @peer-connection :createOffer))]
             ;;  If the connection hasn't yet achieved the "stable" state,
             ;; return to the caller. Another negotiationneeded event
             ;; will be fired when the state stabilizes.
@@ -408,8 +410,8 @@
    it to the <video> element for incoming media."
   [event]
   (log "*** Track event")
-  (oset! (oget (ocall js/document :getElementById "received_video") "srcObject") (nth (oget event "streams") 0))
-  (oset! (oget (ocall js/document :getElementById "hangup_button") "disabled") false))
+  (oset! (ocall js/document :getElementById "received_video") :srcObject (nth (oget event "streams") 0))
+  (oset! (ocall js/document :getElementById "hangup_button") :disabled false))
 
 (defn handle-ice-candidate-event
   "Handles |icecandidate| events by forwarding the specified
@@ -491,12 +493,12 @@
 
     ;; Set up event handlers for the ICE negotiation process.
 
-    (oset! (oget @peer-connection "onicecandidate") handle-ice-candidate-event)
-    (oset! (oget @peer-connection "oniceconnectionstatechange") handle-ice-connection-state-change-event)
-    (oset! (oget @peer-connection "onicegatheringstatechange") handle-ice-gathering-state-change-event)
-    (oset! (oget @peer-connection "onsignalingstatechange") handle-signaling-state-change-event)
-    (oset! (oget @peer-connection "onnegotiationneeded") handle-negotiation-needed-event)
-    (oset! (oget @peer-connection "ontrack") handle-track-event)))
+    (oset! @peer-connection :onicecandidate handle-ice-candidate-event)
+    (oset! @peer-connection :oniceconnectionstatechange handle-ice-connection-state-change-event)
+    (oset! @peer-connection :onicegatheringstatechange handle-ice-gathering-state-change-event)
+    (oset! @peer-connection :onsignalingstatechange handle-signaling-state-change-event)
+    (oset! @peer-connection :onnegotiationneeded handle-negotiation-needed-event)
+    (oset! @peer-connection :ontrack handle-track-event)))
 
 (defn invite
   "Handle a click on an item in the user list by inviting the clicked
@@ -538,8 +540,7 @@
                                                  (ocall :getUserMedia media-constraints)))
                   (-> js/document
                       (ocall :getElementById "local_video")
-                      (oget "srcObject")
-                      (oset! @webcam-stream)))
+                      (oset! :srcObject @webcam-stream)))
               (catch js/Error e (handle-get-user-media-error e)))
 
             ;; Add the tracks from the stream to the RTCPeerConnection

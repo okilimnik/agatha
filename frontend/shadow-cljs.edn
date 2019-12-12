@@ -4,7 +4,7 @@
   [re-frame "0.11.0-rc2"]
   [datascript "0.18.7"]
   [binaryage/oops "0.7.0"]
-  [org.clojure/core.async "0.6.532"]]
+  [funcool/promesa "1.8.1"]]
 
  :builds
  {:app {:target :browser
