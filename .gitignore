@@ -1,12 +1,12 @@
 /target
 frontend/node_modules
 frontend/.shadow-cljs
-frontend/index.js
 frontend/public/js/cljs-runtime
 frontend/public/js/manifest.edn
 backend/node_modules
 backend/.shadow-cljs
-backend/index.js
+backend/public/js/cljs-runtime
+backend/public/js/manifest.edn
 /classes
 /checkouts
 profiles.clj

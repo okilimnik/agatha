@@ -4,18 +4,20 @@
             ["websocket" :refer [server]]
             ["http" :as http]
             ["https" :as https]
-            ["fs" :as fs]))
+            ["fs" :as fs]
+            ["finalhandler" :as finalhandler]
+            ["serve-static" :as serve-static]))
 
 ;; Pathnames of the SSL key and certificate files to use for
 ;; HTTPS connections.
 
-(def key-file-path "/etc/pki/tls/private/mdn-samples.mozilla.org.key")
-(def cert-file-path "/etc/pki/tls/certs/mdn-samples.mozilla.org.crt")
+;(def key-file-path "/etc/pki/tls/private/mdn-samples.mozilla.org.key")
+;(def cert-file-path "/etc/pki/tls/certs/mdn-samples.mozilla.org.crt")
 
 ;; Servers and connection options
 
 (def web-server (atom nil))
-(def https-options (atom {}))
+;(def https-options (atom {}))
 (def ws-server (atom nil))
 
 ;; Used for managing the text chat user list.
@@ -220,30 +222,32 @@
   ;; Try to load the key and certificate files for SSL so we can
   ;; do HTTPS (required for non-local WebRTC).
 
-  (try
-    (do (swap! https-options assoc :key (ocall fs :readFileSync key-file-path))
-        (swap! https-options assoc :cert (ocall fs :readFileSync cert-file-path)))
-    (catch js/Error e (reset! https-options {})))
+  (comment (try
+             (do (swap! https-options assoc :key (ocall fs :readFileSync key-file-path))
+                 (swap! https-options assoc :cert (ocall fs :readFileSync cert-file-path)))
+             (catch js/Error e (reset! https-options {}))))
 
   ;; If we were able to get the key and certificate files, try to
   ;; start up an HTTPS server.
 
-  (try
-    (when-not (empty? @https-options)
-      (reset! web-server (ocall https :createServer (clj->js @https-options) handle-web-request)))
-    (catch js/Error e (do (reset! web-server nil)
-                          (log "Error attempting to create HTTPS server: " (ocall e :toString)))))
+  (comment (try
+             (when-not (empty? @https-options)
+               (reset! web-server (ocall https :createServer (clj->js @https-options) handle-web-request)))
+             (catch js/Error e (do (reset! web-server nil)
+                                   (log "Error attempting to create HTTPS server: " (ocall e :toString))))))
 
   (when-not @web-server
     (try
-      (reset! web-server (ocall http :createServer #js {} handle-web-request))
+      (let [serve (serve-static "./public")]
+        (reset! web-server (ocall http :createServer #js {} (fn [req res] (serve req res (finalhandler req res))))))
       (catch js/Error e (do (reset! web-server nil)
                             (log "Error attempting to create HTTP server: " (ocall e :toString))))))
 
   ;; Spin up the HTTPS server on the port assigned to this sample.
   ;; This will be turned into a WebSocket port very shortly.
 
-  (ocall @web-server :listen 6503 #(log "Server is listening on port 6503"))
+  (let [port (or (oget js/process "env.?PORT") 6503)]
+    (ocall @web-server :listen port #(log "Server is listening on port " port)))
 
   ;; Create the WebSocket server by converting the HTTPS server into one.
 
