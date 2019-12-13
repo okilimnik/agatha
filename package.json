@@ -16,10 +16,8 @@
     "ws": "^7.2.0"
   },
   "scripts": {
-    "start": "node index.js"
-  },
-  "engines": {
-    "node": "10.15.2"
+    "start": "node index.js",
+    "build": "echo No build required"
   },
   "keywords": [],
   "author": "",
