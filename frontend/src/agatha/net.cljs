@@ -52,9 +52,9 @@
   []
   (reset! client-username (oget (ocall js/document :getElementById "name") "value"))
   (send-to-server #js {:username @client-username
-                       :date (js/Date.now)
-                       :id   @client-id
-                       :type "username"}))
+                       :date     (js/Date.now)
+                       :id       @client-id
+                       :type     "username"}))
 
 (defn handle-userlist-msg
   "Given a message containing a list of usernames, this function
@@ -170,9 +170,9 @@
   []
   (close-video-call)
 
-  (send-to-server #js {:username   @client-username
-                       :target @target-username
-                       :type   "hang-up"}))
+  (send-to-server #js {:username @client-username
+                       :target   @target-username
+                       :type     "hang-up"}))
 
 (defn handle-video-offer-msg
   "Accept an offer to video chat. We configure our local settings,
@@ -242,9 +242,9 @@
                        (ocall :setLocalDescription (await-> (ocall @peer-connection :createAnswer))))
 
               (send-to-server #js {:username @client-username
-                                   :target @target-username
-                                   :type "video-answer"
-                                   :sdp (oget @peer-connection "localDescription")})))))))
+                                   :target   @target-username
+                                   :type     "video-answer"
+                                   :sdp      (oget @peer-connection "localDescription")})))))))
 
 (defn handle-video-answer-msg
   "Responds to the 'video-answer' message sent to the caller
@@ -320,7 +320,8 @@
 (defn connect []
   (let [host (or (oget js/window "location.hostname") "localhost")
         scheme (if (= (oget js/document "location.protocol") "https:") "wss" "ws")
-        server-url (str scheme "://" host (if (= host "localhost") ":6503" ""))
+        server-url (str scheme "://" host (if (or (= host "localhost")
+                                                  (clojure.string/starts-with? host "192.168")) ":6503" ""))
         chat-box (ocall js/document :querySelector ".chatbox")
         text (atom "")]
     (log "Connecting to server: " server-url)
@@ -382,10 +383,10 @@
                            (ocall :setLocalDescription offer))
                   ;; Send the offer to the remote peer.
                   (log "---> Sending the offer to the remote peer")
-                  (send-to-server #js {:username   @client-username
-                                       :target @target-username
-                                       :type   "video-offer"
-                                       :sdp    (oget @peer-connection "localDescription")})))))
+                  (send-to-server #js {:username @client-username
+                                       :target   @target-username
+                                       :type     "video-offer"
+                                       :sdp      (oget @peer-connection "localDescription")})))))
       (catch js/Error e (do (log "*** The following error occurred while handling the negotiationneeded event:")
                             (report-error e))))))
 
@@ -466,7 +467,7 @@
                   ;:protocol          "?"                    ;; Allows a subprotocol to be used which provides meta information towards the application
                   ;:negotiated        false                  ;;  If set to true, it removes the automatic setting up of a data channel on the other peer, meaning that you are provided your own way to create a data channel with the same id on the other side
                   ;:id                "?"                    ;; Allows you to provide your own ID for the channel (can only be used in combination with negotiated set to true)
-                  :iceServers #js ["stun:stun.l.google.com:19302"]
+                  :iceServers #js []                        ;#js [#js {:urls "stun:stun.l.google.com:19302"}]
                   ;:iceTransportPolicy   "all"      ;; "relay"
                   ;:iceCandidatePoolSize 5          ;; 0 - 10
                   })
@@ -478,7 +479,7 @@
   use in our video call. Then we configure event handlers to get
   needed notifications on the call."
   []
-  (async
+  (do
     (log "Setting up a connection...")
 
     ;; Create an RTCPeerConnection which knows to use our chosen
@@ -531,11 +532,12 @@
             ;; "preview" box (id "local_video").
 
             (try
-              (do (reset! webcam-stream (await-> (oget js/navigator "mediaDevices")
-                                                 (ocall :getUserMedia media-constraints)))
-                  (-> js/document
-                      (ocall :getElementById "local_video")
-                      (oset! :srcObject @webcam-stream)))
+              (do
+                (reset! webcam-stream (await-> (oget js/navigator "mediaDevices")
+                                               (ocall :getUserMedia media-constraints)))
+                (-> js/document
+                    (ocall :getElementById "local_video")
+                    (oset! :srcObject @webcam-stream)))
               (catch js/Error e (handle-get-user-media-error e)))
 
             ;; Add the tracks from the stream to the RTCPeerConnection
