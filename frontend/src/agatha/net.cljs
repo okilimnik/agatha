@@ -51,7 +51,7 @@
   session."
   []
   (reset! client-username (oget (ocall js/document :getElementById "name") "value"))
-  (send-to-server #js {:name @client-username
+  (send-to-server #js {:username @client-username
                        :date (js/Date.now)
                        :id   @client-id
                        :type "username"}))
@@ -170,7 +170,7 @@
   []
   (close-video-call)
 
-  (send-to-server #js {:name   @client-username
+  (send-to-server #js {:username   @client-username
                        :target @target-username
                        :type   "hang-up"}))
 
@@ -180,7 +180,7 @@
   stream, then create and send an answer to the caller."
   [msg]
   (async
-    (reset! target-username (oget msg "name"))
+    (reset! target-username (oget msg "username"))
 
     ;; If we're not already connected, create an RTCPeerConnection
     ;; to be linked to the caller.
@@ -241,7 +241,7 @@
               (await-> @peer-connection
                        (ocall :setLocalDescription (await-> (ocall @peer-connection :createAnswer))))
 
-              (send-to-server #js {:name @client-username
+              (send-to-server #js {:username @client-username
                                    :target @target-username
                                    :type "video-answer"
                                    :sdp (oget @peer-connection "localDescription")})))))))
@@ -280,18 +280,18 @@
     (log "Message received: ")
     (js/console.dir msg)
     (let [time (js/Date. (oget msg "date"))
-          time-str (ocall time :toLocaleTimeString)]
+          time-str (.toLocaleTimeString time)]
 
       (case (oget msg "type")
 
         "id" (do (reset! client-id (oget msg "id"))
                  (set-username))
 
-        "username" (reset! text (str "<b>User <em>" (oget msg "name") "</em> signed in at " time-str "</b><br>"))
+        "username" (reset! text (str "<b>User <em>" (oget msg "username") "</em> signed in at " time-str "</b><br>"))
 
-        "message" (reset! text (str "(" time-str ") <b>" (oget msg "name") "</b>: " (oget msg "text") "<br>"))
+        "message" (reset! text (str "(" time-str ") <b>" (oget msg "username") "</b>: " (oget msg "text") "<br>"))
 
-        "rejectusername" (let [username (oget msg "name")]
+        "rejectusername" (let [username (oget msg "username")]
                            (reset! text (str "<b>Your username has been set to <em>" username
                                              "</em> because the name you chose is in use.</b><br>")))
         ;; Received an updated user list
@@ -382,7 +382,7 @@
                            (ocall :setLocalDescription offer))
                   ;; Send the offer to the remote peer.
                   (log "---> Sending the offer to the remote peer")
-                  (send-to-server #js {:name   @client-username
+                  (send-to-server #js {:username   @client-username
                                        :target @target-username
                                        :type   "video-offer"
                                        :sdp    (oget @peer-connection "localDescription")})))))

@@ -43,7 +43,7 @@
   names."
   [username]
   (assert (not (clojure.string/blank? username)))
-  (not (some #(= username (oget % "username")) @connection-array)))
+  (not (some #(= username (oget % "?username")) @connection-array)))
 
 (defn send-to-one-user
   "Sends a message (which is already stringified JSON) to a single
@@ -65,7 +65,8 @@
   inefficiently, to handle name change notifications."
   []
   #js {:type  "userlist"
-       :users (clj->js (mapv #(oget % "username") @connection-array))})
+       :users (clj->js (mapv #(oget % "username") @connection-array))
+       :date (js/Date.now)})
 
 (defn send-user-list-to-all
   "Sends a 'userlist' message to all chat members. This is a cheesy way
@@ -109,19 +110,19 @@
 
       (case (oget msg "type")
         ;; Public, textual message
-        "message" (do (oset! msg :name (oget connect "username"))
-                      (oset! msg :text (clojure.string/replace (oget msg "text") #"/(<([^>]+)>)/ig" "")))
+        "message" (do (oset! msg "!username" (oget connect "username"))
+                      (oset! msg "!text" (clojure.string/replace (oget msg "text") #"/(<([^>]+)>)/ig" "")))
 
         ;; Username change
         "username" (let [name-changed? (atom false)
-                         orig-name (oget msg "name")]
+                         orig-name (oget msg "username")]
 
                      ;; Ensure the name is unique by appending a number to it
                      ;; if it's not; keep trying that until it works.
 
                      (loop []
-                       (when-not (is-username-unique? (oget msg "name"))
-                         (oset! msg :name (str orig-name @append-to-make-unique))
+                       (when-not (is-username-unique? (oget msg "username"))
+                         (oset! msg "!username" (str orig-name @append-to-make-unique))
                          (swap! append-to-make-unique inc)
                          (reset! name-changed? true)
                          (recur)))
@@ -133,14 +134,15 @@
                      (when @name-changed?
                        (ocall connect :sendUTF (js/JSON.stringify #js {:id   (oget msg "id")
                                                                        :type "rejectusername"
-                                                                       :name (oget msg "name")})))
+                                                                       :date (js/Date.now)
+                                                                       :username (oget msg "name")})))
 
                      ;; Set this connection's final username and send out the
                      ;; updated user list to all users. Yeah, we're sending a full
                      ;; list instead of just updating. It's horribly inefficient
                      ;; but this is a demo. Don't do this in a real app.
 
-                     (oset! connect :username (oget msg "name"))
+                     (oset! connect "!username" (oget msg "username"))
                      (send-user-list-to-all)
                      (reset! send-to-clients false))
         "default")
@@ -205,7 +207,9 @@
         ;; Send the new client its token; it send back a "username" message to
         ;; tell us what username they want to use.
 
-        (ocall connection :sendUTF (js/JSON.stringify #js {:type "id" :id (oget connection "clientID")}))
+        (ocall connection :sendUTF (js/JSON.stringify #js {:type "id"
+                                                           :id (oget connection "clientID")
+                                                           :date (js/Date.now)}))
 
         (ocall connection :on "message" on-message)
         (ocall connection :on "close" (partial on-close connection))))))
