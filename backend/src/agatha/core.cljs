@@ -196,11 +196,10 @@
 
         ;; Add the new connection to our list of connections.
 
-        (log "Connection accepted from " + (oget connection "remoteAddress") + ".")
+        (log "Connection accepted from " (oget connection "remoteAddress") ".")
         (swap! connection-array conj connection)
 
-        (log (js/JSON.stringify connection))
-        (oset! connection :clientID @next-id)
+        (oset! connection "!clientID" @next-id)
         (swap! next-id inc)
 
         ;; Send the new client its token; it send back a "username" message to
