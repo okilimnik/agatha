@@ -320,7 +320,7 @@
 (defn connect []
   (let [host (or (oget js/window "location.hostname") "localhost")
         scheme (if (= (oget js/document "location.protocol") "https:") "wss" "ws")
-        server-url (str scheme "://" host ":6503")
+        server-url (str scheme "://" host (if (= host "localhost") ":6503" ""))
         chat-box (ocall js/document :querySelector ".chatbox")
         text (atom "")]
     (log "Connecting to server: " server-url)

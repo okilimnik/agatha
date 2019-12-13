@@ -36,3 +36,18 @@ cd backend && node index.js
 cd frontend && shadow-cljs watch app
 ```
 After shadow-cljs compiles open [browser](http://localhost:8020)
+
+### Heroku deploy
+Once run:
+```
+heroku create
+heroku buildpacks:set heroku/nodejs
+```
+Then every new deploy run:
+```
+cd frontend && shadow-cljs release app && cd ..
+shadow-cljs release app
+git add .
+git commit -m "changelog"
+git push heroku master
+```
