@@ -1,7 +1,7 @@
 # Agatha, e-governance, e-voting blockchain based system
 
 ## Roadmap
-1. Write a webrtc signaling server and client for p2p messaging 
+1. Write a webrtc signaling server and client for p2p messaging - done. 
 2. Implement STUN/TURN server within the signaling server
 3. Make the server to work as client as well.
 4. Select a consensus for blockchain.
@@ -37,7 +37,7 @@ cd frontend && shadow-cljs watch app
 ```
 After shadow-cljs compiles open [browser](http://localhost:8020)
 
-### Heroku deploy
+## Heroku deploy
 Once run:
 ```
 heroku create
