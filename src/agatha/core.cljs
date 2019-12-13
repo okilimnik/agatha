@@ -6,7 +6,8 @@
             ["https" :as https]
             ["fs" :as fs]
             ["finalhandler" :as finalhandler]
-            ["serve-static" :as serve-static]))
+            ["serve-static" :as serve-static]
+            ["node-turn" :as turn]))
 
 ;; Pathnames of the SSL key and certificate files to use for
 ;; HTTPS connections.
@@ -256,7 +257,13 @@
 
   (when-not @ws-server (log "ERROR: Unable to create WebSocket server!"))
 
-  (ocall @ws-server :on "request" on-request))
+  (ocall @ws-server :on "request" on-request)
+
+  (-> (turn. #js {:authMech    "long-term"
+                  :credentials #js {:username "master"
+                                    :password "master"}})
+      (ocall :start))
+  )
 
 (defn reload!
   []
