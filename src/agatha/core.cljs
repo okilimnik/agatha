@@ -237,7 +237,8 @@
 
     (try
       (when-not (empty? @https-options)
-        (reset! web-server (ocall https :createServer (clj->js @https-options) handle-web-request)))
+        (let [serve (serve-static "./public")]
+          (reset! web-server (ocall https :createServer (clj->js @https-options) (fn [req res] (serve req res (finalhandler req res)))))))
       (catch js/Error e (do (reset! web-server nil)
                             (log "Error attempting to create HTTPS server: " (ocall e :toString)))))
 
