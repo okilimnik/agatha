@@ -260,9 +260,9 @@
 
   (ocall @ws-server :on "request" on-request)
 
-  (-> (turn. #js {:authMech    "long-term"
-                  :credentials #js {:username "master"}})
-      (ocall :start)))
+  (comment (-> (turn. #js {:authMech    "long-term"
+                           :credentials #js {:username "master"}})
+               (ocall :start))))
 
 (defn reload!
   []
