@@ -9,4 +9,4 @@
                  [reagent "0.9.0-rc2"]
                  [re-frame "0.11.0-rc2"]
                  [binaryage/oops "0.7.0"]]
-  :source-paths ["frontend/src" "backend/src"])
+  :source-paths ["frontend/src" "src"])
