@@ -247,7 +247,7 @@
   ;; Spin up the HTTPS server on the port assigned to this sample.
   ;; This will be turned into a WebSocket port very shortly.
 
-  (let [port (or (oget js/process "env.?PORT") 6503)]
+  (let [port (or (oget js/process "env.?PORT") 80)]
     (ocall @web-server :listen port #(log "Server is listening on port " port)))
 
   ;; Create the WebSocket server by converting the HTTPS server into one.
@@ -260,10 +260,8 @@
   (ocall @ws-server :on "request" on-request)
 
   (-> (turn. #js {:authMech    "long-term"
-                  :credentials #js {:username "master"
-                                    :password "master"}})
-      (ocall :start))
-  )
+                  :credentials #js {:username "master"}})
+      (ocall :start)))
 
 (defn reload!
   []

@@ -321,7 +321,7 @@
   (let [host (or (oget js/window "location.hostname") "localhost")
         scheme (if (= (oget js/document "location.protocol") "https:") "wss" "ws")
         server-url (str scheme "://" host (if (or (= host "localhost")
-                                                  (clojure.string/starts-with? host "192.168")) ":6503" ""))
+                                                  (clojure.string/starts-with? host "192.168")) ":80" ""))
         chat-box (ocall js/document :querySelector ".chatbox")
         text (atom "")]
     (log "Connecting to server: " server-url)
