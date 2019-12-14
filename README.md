@@ -39,8 +39,7 @@ After shadow-cljs compiles open [browser](http://localhost:8020)
 
 ## Release
 ```
-cd frontend && shadow-cljs release app && cd ..
-shadow-cljs release app
+cd frontend && shadow-cljs release app && cd .. && shadow-cljs release app
 ```
 ## Run as daemon 
 I use [pm2](https://pm2.keymetrics.io/docs/usage/quick-start/).
