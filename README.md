@@ -28,7 +28,7 @@ cd backend && shadow-cljs watch app
 ```
 In another shell after shadow-cljs compiles:
 ```
-cd backend && node index.js
+node index.js --host=<optional_host> --port=<optional_port> --key=<optional_server_key_path> --cert=<optional_server_certificate_path>
 ```
 
 ### Run client
@@ -37,17 +37,11 @@ cd frontend && shadow-cljs watch app
 ```
 After shadow-cljs compiles open [browser](http://localhost:8020)
 
-## Heroku deploy
-Once run:
-```
-heroku create
-heroku buildpacks:set heroku/nodejs
-```
-Then every new deploy run:
+## Release
 ```
 cd frontend && shadow-cljs release app && cd ..
 shadow-cljs release app
-git add .
-git commit -m "changelog"
-git push heroku master
 ```
+## Run as daemon 
+I use [pm2](https://pm2.keymetrics.io/docs/usage/quick-start/).
+A good [guide](https://www.digitalocean.com/community/tutorials/how-to-set-up-a-node-js-application-for-production-on-ubuntu-18-04)
