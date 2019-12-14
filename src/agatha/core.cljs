@@ -247,9 +247,9 @@
   ;; Spin up the HTTPS server on the port assigned to this sample.
   ;; This will be turned into a WebSocket port very shortly.
 
-  (let [host (or (oget js/process "env.?HOST") "localhost")
+  (let [host (or (oget js/process "env.?HOST") "0.0.0.0")
         port (or (oget js/process "env.?PORT") 80)]
-    (ocall @web-server :listen port host #(log "Server is listening on port " port)))
+    (ocall @web-server :listen port host #(log "Server is listening on " host ":" port)))
 
   ;; Create the WebSocket server by converting the HTTPS server into one.
 
