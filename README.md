@@ -28,7 +28,7 @@ cd backend && shadow-cljs watch app
 ```
 In another shell after shadow-cljs compiles:
 ```
-node index.js --host=<optional_host> --port=<optional_port> --key=<optional_server_key_path> --cert=<optional_server_certificate_path>
+node index.js --host=<optional_host> --port=<optional_port> --key=<optional_server_key_path> --cert=<optional_server_certificate_path> --realm=<domain> --username=<optional_turn_username> --password=<optional_turn_password>
 ```
 
 ### Run client

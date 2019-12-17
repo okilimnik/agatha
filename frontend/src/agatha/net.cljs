@@ -467,7 +467,10 @@
                   ;:protocol          "?"                    ;; Allows a subprotocol to be used which provides meta information towards the application
                   ;:negotiated        false                  ;;  If set to true, it removes the automatic setting up of a data channel on the other peer, meaning that you are provided your own way to create a data channel with the same id on the other side
                   ;:id                "?"                    ;; Allows you to provide your own ID for the channel (can only be used in combination with negotiated set to true)
-                  :iceServers #js []                        ;#js [#js {:urls "stun:stun.l.google.com:19302"}]
+                  :iceServers #js [#js {:urls "turn:kylymnyk.com:3478"
+                                        :username "admin"
+                                        :credential "admin"
+                                        }]
                   ;:iceTransportPolicy   "all"      ;; "relay"
                   ;:iceCandidatePoolSize 5          ;; 0 - 10
                   })

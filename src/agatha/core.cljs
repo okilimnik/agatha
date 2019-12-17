@@ -70,7 +70,7 @@
   []
   #js {:type  "userlist"
        :users (clj->js (mapv #(oget % "username") @connection-array))
-       :date (js/Date.now)})
+       :date  (js/Date.now)})
 
 (defn send-user-list-to-all
   "Sends a 'userlist' message to all chat members. This is a cheesy way
@@ -136,9 +136,9 @@
                      ;; altered by the server.
 
                      (when @name-changed?
-                       (ocall connect :sendUTF (js/JSON.stringify #js {:id   (oget msg "id")
-                                                                       :type "rejectusername"
-                                                                       :date (js/Date.now)
+                       (ocall connect :sendUTF (js/JSON.stringify #js {:id       (oget msg "id")
+                                                                       :type     "rejectusername"
+                                                                       :date     (js/Date.now)
                                                                        :username (oget msg "name")})))
 
                      ;; Set this connection's final username and send out the
@@ -212,7 +212,7 @@
         ;; tell us what username they want to use.
 
         (ocall connection :sendUTF (js/JSON.stringify #js {:type "id"
-                                                           :id (oget connection "clientID")
+                                                           :id   (oget connection "clientID")
                                                            :date (js/Date.now)}))
 
         (ocall connection :on "message" on-message)
@@ -265,9 +265,16 @@
 
     (ocall @ws-server :on "request" on-request)
 
-    (comment (-> (turn. #js {:authMech    "long-term"
-                             :credentials #js {:username "master"}})
-                 (ocall :start)))))
+    (-> (turn. (clj->js {:listeningPort 3478
+                         :minPort       49152
+                         :maxPort       49200
+                         :authMech      "long-term"
+                         :credentials   {(keyword (or (oget args "?username") "admin")) (or (oget args "?password") "admin")}
+                         :realm         (or (oget args "?realm") "")
+                         :debugLevel    "DEBUG"
+                         :debug         (fn [level message]
+                                          (log level ":" message))}))
+        (ocall :start))))
 
 (defn reload!
   []
