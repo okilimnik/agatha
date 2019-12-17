@@ -373,7 +373,7 @@
             ;;  If the connection hasn't yet achieved the "stable" state,
             ;; return to the caller. Another negotiationneeded event
             ;; will be fired when the state stabilizes.
-            (if-not (= (oget peer-connection "signalingState" "stable"))
+            (if-not (= (oget peer-connection "signalingState") "stable")
               (log "     -- The connection isn't stable yet; postponing...")
 
               ;; Establish the offer as the local peer's current
