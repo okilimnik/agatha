@@ -266,7 +266,7 @@
     (ocall @ws-server :on "request" on-request)
 
     (-> (turn. (clj->js {:listeningPort 3478
-                         :listeningIps ["0.0.0.0"]
+                         :listeningIps  ["0.0.0.0"]
                          :minPort       49152
                          :maxPort       49200
                          :authMech      "long-term"

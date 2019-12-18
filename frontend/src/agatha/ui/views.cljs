@@ -6,9 +6,6 @@
 (defn app-root []
   [:div.container
    [:div.infobox
-    [:p "This is a simple chat system implemented using WebSockets. It works by sending packets of JSON back and forth with the server."
-     [:a {:href "https://github.com/mdn/samples-server/tree/master/s/webrtc-from-chat"}] "Check out the source</a> on Github."]
-    [:p.mdn-disclaimer "This text and audio/video chat example is offered as-is for demonstration purposes only, and should not be used for any other purpose."]
     [:p "Click a username in the user list to ask them to enter a one-on-one video chat with you."]
     [:p "Enter a username:"
      [:input {:id "name" :type "text" :maxLength "12" :required true :autoComplete "username" :inputMode "verbatim" :placeholder "Username"}]
@@ -17,8 +14,8 @@
    [:div.chatbox]
    [:div.camerabox
     [:video {:id "received_video" :autoPlay true}]
-    [:video {:id "local_video" :autoPlay true :muted true}]
-    [:button {:id "hangup_button" :onClick hang-up-call :role "button" :disabled true} "Hang Up"]]
+    [:video {:id "local_video" :autoPlay true :muted true}]]
+   [:button {:id "hangup_button" :onClick hang-up-call :role "button" :disabled true} "Hang Up"]
    [:div.empty-container]
    [:div.chat-controls "Chat:" [:br]
     [:input {:id "text" :type "text" :name "text" :size "100" :maxLength "256" :placeholder "Say something meaningful..." :autoComplete "off" :onKeyUp handle-key :disabled true}]

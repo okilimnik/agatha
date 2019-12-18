@@ -231,9 +231,9 @@
                     (ocall :getTracks)
                     (ocall :forEach
                            (fn [track]
-                             (reset! transceiver track)
+                             ;(reset! transceiver track)
                              (-> @peer-connection
-                                 (ocall :addTransceiver track #js {:streams #js [@webcam-stream]})))))
+                                 (ocall :addTrack track @webcam-stream)))))
                 (catch js/Error e (handle-get-user-media-error e)))
 
               (log "---> Creating and sending answer to caller")
@@ -321,7 +321,7 @@
   (let [host (or (oget js/window "location.hostname") "localhost")
         scheme (if (= (oget js/document "location.protocol") "https:") "wss" "ws")
         server-url (str scheme "://" host (if (or (= host "localhost")
-                                                  (clojure.string/starts-with? host "192.168")) "" ""))
+                                                  (clojure.string/starts-with? host "192.168")) ":3001" ""))
         chat-box (ocall js/document :querySelector ".chatbox")
         text (atom "")]
     (log "Connecting to server: " server-url)
@@ -467,10 +467,7 @@
                   ;:protocol          "?"                    ;; Allows a subprotocol to be used which provides meta information towards the application
                   ;:negotiated        false                  ;;  If set to true, it removes the automatic setting up of a data channel on the other peer, meaning that you are provided your own way to create a data channel with the same id on the other side
                   ;:id                "?"                    ;; Allows you to provide your own ID for the channel (can only be used in combination with negotiated set to true)
-                  :iceServers #js [#js {:urls "turn:kylymnyk.com:3478"
-                                        :username "admin"
-                                        :credential "admin"
-                                        }]
+                  :iceServers                              #js [] ; #js [#js {:urls "turn:kylymnyk.com:3478" :username "admin" :credential "admin"}]
                   ;:iceTransportPolicy   "all"      ;; "relay"
                   ;:iceCandidatePoolSize 5          ;; 0 - 10
                   })
@@ -514,8 +511,8 @@
 
         ;; Don't allow users to call themselves, because weird.
 
-        (if (= clicked-username @client-username)
-          (js/alert "I'm afraid I can't let you talk to yourself. That would be weird.")
+        ;(if (= clicked-username @client-username)
+        ;    (js/alert "I'm afraid I can't let you talk to yourself. That would be weird.")
           (do
 
             ;; Record the username being called for future reference
@@ -550,7 +547,9 @@
                   (ocall :getTracks)
                   (ocall :forEach
                          (fn [track]
-                           (reset! transceiver track)
+                           ;(reset! transceiver track)
                            (-> @peer-connection
-                               (ocall :addTransceiver track #js {:streams #js [@webcam-stream]})))))
-              (catch js/Error e (handle-get-user-media-error e)))))))))
+                               (ocall :addTrack track @webcam-stream)))))
+              (catch js/Error e (handle-get-user-media-error e))))
+        ; )
+        ))))
