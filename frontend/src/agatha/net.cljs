@@ -467,7 +467,7 @@
                   ;:protocol          "?"                    ;; Allows a subprotocol to be used which provides meta information towards the application
                   ;:negotiated        false                  ;;  If set to true, it removes the automatic setting up of a data channel on the other peer, meaning that you are provided your own way to create a data channel with the same id on the other side
                   ;:id                "?"                    ;; Allows you to provide your own ID for the channel (can only be used in combination with negotiated set to true)
-                  :iceServers                              #js [] ; #js [#js {:urls "turn:kylymnyk.com:3478" :username "admin" :credential "admin"}]
+                  :iceServers #js [#js {:urls "turn:kylymnyk.com:3478" :username "admin" :credential "admin"}]
                   ;:iceTransportPolicy   "all"      ;; "relay"
                   ;:iceCandidatePoolSize 5          ;; 0 - 10
                   })
@@ -513,43 +513,43 @@
 
         ;(if (= clicked-username @client-username)
         ;    (js/alert "I'm afraid I can't let you talk to yourself. That would be weird.")
-          (do
+        (do
 
-            ;; Record the username being called for future reference
+          ;; Record the username being called for future reference
 
-            (reset! target-username clicked-username)
-            (log "Inviting user " @target-username)
+          (reset! target-username clicked-username)
+          (log "Inviting user " @target-username)
 
-            ;; Call createPeerConnection() to create the RTCPeerConnection.
-            ;; When this returns, peer-connection is our RTCPeerConnection
-            ;; and webcam-stream is a stream coming from the camera. They are
-            ;; not linked together in any way yet.
+          ;; Call createPeerConnection() to create the RTCPeerConnection.
+          ;; When this returns, peer-connection is our RTCPeerConnection
+          ;; and webcam-stream is a stream coming from the camera. They are
+          ;; not linked together in any way yet.
 
-            (log "Setting up connection to invite user: " @target-username)
-            (create-peer-connection)
+          (log "Setting up connection to invite user: " @target-username)
+          (create-peer-connection)
 
-            ;; Get access to the webcam stream and attach it to the
-            ;; "preview" box (id "local_video").
+          ;; Get access to the webcam stream and attach it to the
+          ;; "preview" box (id "local_video").
 
-            (try
-              (do
-                (reset! webcam-stream (await-> (oget js/navigator "mediaDevices")
-                                               (ocall :getUserMedia media-constraints)))
-                (-> js/document
-                    (ocall :getElementById "local_video")
-                    (oset! :srcObject @webcam-stream)))
-              (catch js/Error e (handle-get-user-media-error e)))
+          (try
+            (do
+              (reset! webcam-stream (await-> (oget js/navigator "mediaDevices")
+                                             (ocall :getUserMedia media-constraints)))
+              (-> js/document
+                  (ocall :getElementById "local_video")
+                  (oset! :srcObject @webcam-stream)))
+            (catch js/Error e (handle-get-user-media-error e)))
 
-            ;; Add the tracks from the stream to the RTCPeerConnection
+          ;; Add the tracks from the stream to the RTCPeerConnection
 
-            (try
-              (-> @webcam-stream
-                  (ocall :getTracks)
-                  (ocall :forEach
-                         (fn [track]
-                           ;(reset! transceiver track)
-                           (-> @peer-connection
-                               (ocall :addTrack track @webcam-stream)))))
-              (catch js/Error e (handle-get-user-media-error e))))
+          (try
+            (-> @webcam-stream
+                (ocall :getTracks)
+                (ocall :forEach
+                       (fn [track]
+                         ;(reset! transceiver track)
+                         (-> @peer-connection
+                             (ocall :addTrack track @webcam-stream)))))
+            (catch js/Error e (handle-get-user-media-error e))))
         ; )
         ))))
