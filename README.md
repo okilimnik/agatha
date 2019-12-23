@@ -4,7 +4,7 @@
 1. Webrtc signaling server and client for p2p messaging - [done](https://github.com/mdn/samples-server/tree/master/s/webrtc-from-chat). 
 2. STUN/TURN server within the signaling server - [done](https://github.com/Atlantis-Software/node-turn).
 3. Consensus.
-4. Identity system.
+4. Identity system - [PVID](https://www.researchgate.net/publication/221548697_Pseudo-Voter_Identity_PVID_Scheme_for_e-Voting_Protocols).
 5. Privacy-preserving computation problem in e-voting can be resolved simply by taking assumption that voting will take place at a particular time within a short (a few minutes, maybe up to 15 minutes) interval. In that case there is no such problem at all. We don't need a whole day for election and a few days for calculation as it happens on usual elections, everybody now has a cell phone and GSM (or WiFi) network at hand and can vote in few seconds at home or at office. We only need to provide enough bandwidth and network stability.
 6. UI.
 
