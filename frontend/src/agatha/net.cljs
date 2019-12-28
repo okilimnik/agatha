@@ -1,5 +1,6 @@
 (ns agatha.net
   (:require [oops.core :refer [ocall oset! oget]]
+            [re-frame.core :refer [subscribe]]
             [cljs.reader :as edn]
             [promesa.core :as p]
             [promesa.async-cljs :refer-macros [async]]
@@ -318,10 +319,10 @@
             (log-error msg))))))
 
 (defn connect []
-  (let [host (or (oget js/window "location.hostname") "localhost")
+  (let [hostname (oget js/window "location.hostname")
+        port (oget js/window "location.port")
         scheme (if (= (oget js/document "location.protocol") "https:") "wss" "ws")
-        server-url (str scheme "://" host (if (or (= host "localhost")
-                                                  (clojure.string/starts-with? host "192.168")) ":3001" ""))
+        server-url (str scheme "://" hostname ":" port)
         chat-box (ocall js/document :querySelector ".chatbox")
         text (atom "")]
     (log "Connecting to server: " server-url)
@@ -461,16 +462,18 @@
   [_]
   (log "*** ICE gathering state changed to: " (oget @peer-connection "iceGatheringState")))
 
-(def options #js {;:ordered              false      ;; If the data channel should guarantee order or not
-                  ;:maxPacketLifeTime    3000       ;; The maximum time to try and retransmit a failed message
-                  ;:maxRetransmits    5                      ;; The maximum number of times to try and retransmit a failed message
-                  ;:protocol          "?"                    ;; Allows a subprotocol to be used which provides meta information towards the application
-                  ;:negotiated        false                  ;;  If set to true, it removes the automatic setting up of a data channel on the other peer, meaning that you are provided your own way to create a data channel with the same id on the other side
-                  ;:id                "?"                    ;; Allows you to provide your own ID for the channel (can only be used in combination with negotiated set to true)
-                  :iceServers #js [#js {:urls "turn:kylymnyk.com:3478" :username "admin" :credential "admin"}]
-                  ;:iceTransportPolicy   "all"      ;; "relay"
-                  ;:iceCandidatePoolSize 5          ;; 0 - 10
-                  })
+(defn options []
+  (let [config (:turn @(subscribe [:config]))]
+    #js {;:ordered              false      ;; If the data channel should guarantee order or not
+         ;:maxPacketLifeTime    3000       ;; The maximum time to try and retransmit a failed message
+         ;:maxRetransmits    5                      ;; The maximum number of times to try and retransmit a failed message
+         ;:protocol          "?"                    ;; Allows a subprotocol to be used which provides meta information towards the application
+         ;:negotiated        false                  ;;  If set to true, it removes the automatic setting up of a data channel on the other peer, meaning that you are provided your own way to create a data channel with the same id on the other side
+         ;:id                "?"                    ;; Allows you to provide your own ID for the channel (can only be used in combination with negotiated set to true)
+         :iceServers #js [#js {:urls (str "turn:" (:realm config) ":" (:port config)) :username (:username config) :credential (:password config)}]
+         ;:iceTransportPolicy   "all"      ;; "relay"
+         ;:iceCandidatePoolSize 5          ;; 0 - 10
+         }))
 
 (defn create-peer-connection
   "Create the RTCPeerConnection which knows how to talk to our
@@ -485,7 +488,7 @@
     ;; Create an RTCPeerConnection which knows to use our chosen
     ;; STUN server.
 
-    (reset! peer-connection (js/RTCPeerConnection. options))
+    (reset! peer-connection (js/RTCPeerConnection. (options)))
 
     ;; Set up event handlers for the ICE negotiation process.
 

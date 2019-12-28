@@ -1,6 +1,7 @@
 (ns agatha.core
   (:require [oops.core :refer [oget oset! ocall]]
             [clojure.string]
+            [agatha.util :refer [read-config]]
             ["websocket" :refer [server]]
             ["http" :as http]
             ["https" :as https]
@@ -18,6 +19,7 @@
 
 ;; Servers and connection options
 
+(def config (atom {}))
 (def web-server (atom nil))
 (def https-options (atom {}))
 (def ws-server (atom nil))
@@ -220,62 +222,61 @@
 
 (defn start
   []
+  (reset! config (read-config))
 
-  (let [args (minimist (.slice (oget js/process "argv") 2))]
+  (js/console.log @config)
+  ;; Try to load the key and certificate files for SSL so we can
+  ;; do HTTPS (required for non-local WebRTC).
 
-    (js/console.log args)
-    ;; Try to load the key and certificate files for SSL so we can
-    ;; do HTTPS (required for non-local WebRTC).
+  (try
+    (do (swap! https-options assoc :key (ocall fs :readFileSync (get-in @config [:ssl :key])))
+        (swap! https-options assoc :cert (ocall fs :readFileSync (get-in @config [:ssl :cert]))))
+    (catch js/Error e (reset! https-options {})))
 
+  ;; If we were able to get the key and certificate files, try to
+  ;; start up an HTTPS server.
+
+  (try
+    (when-not (empty? @https-options)
+      (let [serve (serve-static "./public")]
+        (reset! web-server (ocall https :createServer (clj->js @https-options) (fn [req res] (serve req res (finalhandler req res)))))))
+    (catch js/Error e (do (reset! web-server nil)
+                          (log "Error attempting to create HTTPS server: " (ocall e :toString)))))
+
+  (when-not @web-server
     (try
-      (do (swap! https-options assoc :key (ocall fs :readFileSync (oget args "key")))
-          (swap! https-options assoc :cert (ocall fs :readFileSync (oget args "cert"))))
-      (catch js/Error e (reset! https-options {})))
-
-    ;; If we were able to get the key and certificate files, try to
-    ;; start up an HTTPS server.
-
-    (try
-      (when-not (empty? @https-options)
-        (let [serve (serve-static "./public")]
-          (reset! web-server (ocall https :createServer (clj->js @https-options) (fn [req res] (serve req res (finalhandler req res)))))))
+      (let [serve (serve-static "./public")]
+        (reset! web-server (ocall http :createServer #js {} (fn [req res] (serve req res (finalhandler req res))))))
       (catch js/Error e (do (reset! web-server nil)
-                            (log "Error attempting to create HTTPS server: " (ocall e :toString)))))
+                            (log "Error attempting to create HTTP server: " (ocall e :toString))))))
 
-    (when-not @web-server
-      (try
-        (let [serve (serve-static "./public")]
-          (reset! web-server (ocall http :createServer #js {} (fn [req res] (serve req res (finalhandler req res))))))
-        (catch js/Error e (do (reset! web-server nil)
-                              (log "Error attempting to create HTTP server: " (ocall e :toString))))))
+  ;; Spin up the HTTPS server on the port assigned to this sample.
+  ;; This will be turned into a WebSocket port very shortly.
 
-    ;; Spin up the HTTPS server on the port assigned to this sample.
-    ;; This will be turned into a WebSocket port very shortly.
+  (let [host (get-in @config [:host])
+        port (get-in @config [:port])]
+    (ocall @web-server :listen port host #(log "Server is listening on " host ":" port)))
 
-    (let [host (or (oget args "?host") "0.0.0.0")
-          port (or (oget args "?port") 80)]
-      (ocall @web-server :listen port host #(log "Server is listening on " host ":" port)))
+  ;; Create the WebSocket server by converting the HTTPS server into one.
 
-    ;; Create the WebSocket server by converting the HTTPS server into one.
+  (reset! ws-server (server. #js {:httpServer            @web-server
+                                  :autoAcceptConnections false}))
 
-    (reset! ws-server (server. #js {:httpServer            @web-server
-                                    :autoAcceptConnections false}))
+  (when-not @ws-server (log "ERROR: Unable to create WebSocket server!"))
 
-    (when-not @ws-server (log "ERROR: Unable to create WebSocket server!"))
+  (ocall @ws-server :on "request" on-request)
 
-    (ocall @ws-server :on "request" on-request)
-
-    (-> (turn. (clj->js {:listeningPort 3478
-                         :listeningIps  ["0.0.0.0"]
-                         :minPort       49152
-                         :maxPort       49200
-                         :authMech      "long-term"
-                         :credentials   {(keyword (or (oget args "?username") "admin")) (or (oget args "?password") "admin")}
-                         :realm         (or (oget args "?realm") "")
-                         :debugLevel    "DEBUG"
-                         :debug         (fn [level message]
-                                          (log level ":" message))}))
-        (ocall :start))))
+  (comment (-> (turn. (clj->js {:listeningPort (get-in @config [:turn :port])
+                                :listeningIps  [(get-in @config [:host])]
+                                :minPort       (get-in @config [:turn :minPort])
+                                :maxPort       (get-in @config [:turn :maxPort])
+                                :authMech      (get-in @config [:turn :authMech])
+                                :credentials   {(keyword (get-in @config [:turn :username])) (get-in @config [:turn :password])}
+                                :realm         (get-in @config [:turn :realm])
+                                :debugLevel    (get-in @config [:turn :debugLevel])
+                                :debug         (fn [level message]
+                                                 (log level ":" message))}))
+               (ocall :start))))
 
 (defn reload!
   []

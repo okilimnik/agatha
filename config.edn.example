@@ -1,0 +1,15 @@
+{:idp   {:auth0 {:domain   "<domain>"
+                 :clientId "<id>"}}
+ :host  "0.0.0.0"
+ :port  3001
+ :ssl   {:key  "<path_to_server_key>"
+         :cert "<path_to_server_ssl_cert>"}
+ :turn  {:realm      "<domain>"
+         :port       3478
+         :minPort    49152
+         :maxPort    49200
+         :authMech   "long-term"
+         :username   "admin"
+         :password   "admin"
+         :debugLevel "DEBUG"}
+ }

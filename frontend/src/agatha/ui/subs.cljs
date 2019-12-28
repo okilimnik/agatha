@@ -2,6 +2,16 @@
   (:require [re-frame.core :refer [reg-sub]]))
 
 (reg-sub
-  :app-view
-  (fn [{:keys [page]}]
-    {:page-id page}))
+  :config
+  (fn [db _]
+    (:config db)))
+
+(reg-sub
+  :auth0
+  (fn [db _]
+    (:auth0 db)))
+
+(reg-sub
+  :authenticated?
+  (fn [db _]
+    (:authenticated? db)))
