@@ -235,17 +235,17 @@
                              ;(reset! transceiver track)
                              (-> @peer-connection
                                  (ocall :addTrack track @webcam-stream)))))
-                (catch js/Error e (handle-get-user-media-error e)))
+                (catch js/Error e (handle-get-user-media-error e))))
 
-              (log "---> Creating and sending answer to caller")
+            (log "---> Creating and sending answer to caller")
 
-              (await-> @peer-connection
-                       (ocall :setLocalDescription (await-> (ocall @peer-connection :createAnswer))))
+            (await-> @peer-connection
+                     (ocall :setLocalDescription (await-> (ocall @peer-connection :createAnswer))))
 
-              (send-to-server #js {:username @client-username
-                                   :target   @target-username
-                                   :type     "video-answer"
-                                   :sdp      (oget @peer-connection "localDescription")})))))))
+            (send-to-server #js {:username @client-username
+                                 :target   @target-username
+                                 :type     "video-answer"
+                                 :sdp      (oget @peer-connection "localDescription")}))))))
 
 (defn handle-video-answer-msg
   "Responds to the 'video-answer' message sent to the caller
