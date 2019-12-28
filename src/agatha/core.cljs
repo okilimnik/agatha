@@ -2,6 +2,7 @@
   (:require [oops.core :refer [oget oset! ocall]]
             [clojure.string]
             [agatha.util :refer [read-config]]
+            [agatha.pvid :as pvid]
             ["websocket" :refer [server]]
             ["http" :as http]
             ["https" :as https]
@@ -10,6 +11,7 @@
             ["serve-static" :as serve-static]
             ["node-turn" :as turn]
             ["minimist" :as minimist]))
+
 
 ;; Pathnames of the SSL key and certificate files to use for
 ;; HTTPS connections.
@@ -118,6 +120,8 @@
         ;; Public, textual message
         "message" (do (oset! msg "!username" (oget connect "username"))
                       (oset! msg "!text" (clojure.string/replace (oget msg "text") #"/(<([^>]+)>)/ig" "")))
+        "sign" (do (oset! msg "!username" (oget connect "username"))
+                   (oset! msg "!text" (clojure.string/replace (oget msg "text") #"/(<([^>]+)>)/ig" "")))
 
         ;; Username change
         "username" (let [name-changed? (atom false)
@@ -224,7 +228,7 @@
   []
   (reset! config (read-config))
 
-  (js/console.log @config)
+  (pvid/init)
   ;; Try to load the key and certificate files for SSL so we can
   ;; do HTTPS (required for non-local WebRTC).
 

@@ -12,6 +12,7 @@ backend/public/js/cljs-runtime
 backend/public/js/manifest.edn
 public/js
 index.js
+signature.pem
 /classes
 /checkouts
 profiles.clj

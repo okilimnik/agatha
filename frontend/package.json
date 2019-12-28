@@ -8,9 +8,13 @@
   },
   "dependencies": {
     "bluebird": "^3.7.2",
+    "js-sha256": "^0.9.0",
+    "jsbn": "^1.1.0",
+    "node-rsa": "^1.0.7",
     "process": "^0.11.10",
     "react": "^16.9.0",
     "react-dom": "^16.9.0",
+    "secure-random": "^1.1.2",
     "webrtc-adapter": "^7.3.0"
   },
   "devDependencies": {},
