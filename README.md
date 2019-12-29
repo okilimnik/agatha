@@ -15,6 +15,10 @@ Please refer to the full [User Guide](https://shadow-cljs.github.io/docs/UsersGu
 ### Config
 Rename config.edn.example to config.edn and fill it with your data.
 
+
+### Signature key
+First time signature key creation will take a few minutes as its length is hardcoded to 4096 bits.
+
 ### Run server
 In one shell:
 ```
