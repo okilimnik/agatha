@@ -26,5 +26,6 @@ yarn.lock
 *.class
 /.lein-*
 /.nrepl-port
+.nrepl-port
 .hgignore
 .hg/
