@@ -1,6 +1,13 @@
 (ns agatha.util
-  (:require [clojure.java.io :as io]
+  (:require [promesa.core :as p]
             [clojure.edn :as edn]))
+
+#?(:clj
+   (defmacro await-> [thenable & thens]
+     `(-> ~thenable
+          ~@thens
+          ~'js/Promise.resolve
+          p/await)))
 
 #?(:clj
    (defmacro read-config []

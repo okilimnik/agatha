@@ -1,5 +1,6 @@
 {:source-paths ["src"]
- :dependencies [[binaryage/oops "0.7.0"]]
+ :dependencies [[binaryage/oops "0.7.0"]
+                [funcool/promesa "1.8.1"]]
  :builds {:app {:target :node-script
                 :output-to "index.js"
                 :main agatha.core/main!

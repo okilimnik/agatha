@@ -27,3 +27,10 @@
                       (ocall :mod N!))]
       {:r @r
        :blinded blinded})))
+
+(defn create-identities []
+  (let [identities (loop [i 0
+                          result []]
+                     (if (= (count result) 10)
+                       result
+                       (recur (inc i) (conj result (NodeRSA. #js {:b 4096})))))]))
