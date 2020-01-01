@@ -1,6 +1,5 @@
 (ns agatha.pvid
   (:require [oops.core :refer [oget oset! ocall]]
-            ["node-rsa" :as NodeRSA]
             ["jsbn" :refer [BigInteger]]
             ["js-sha256" :as sha256]
             ["secure-random" :as secureRandom]
@@ -33,11 +32,17 @@
 
 (defn create-identities []
   (let [key! (ocall EC :genKeyPair)
-        public   (ocall key! :getPublic)
+        public (ocall key! :getPublic)
+        y (ocall public :getY)
         identities (loop [result []]
                      (if (= (count result) 10)
                        result
                        (let [last-identity (if (empty? result) public (last result))
-                             new-identity (ocall key! :derive last-identity)]
-                         (recur (conj result new-identity)))))]
-    (js/console.log (str "identities: " identities))))
+                             new-identity (-> EC
+                                              (ocall :keyFromPublic
+                                                     #js {:x (.toString (ocall key! :derive last-identity) "hex")
+                                                          :y (.toString y "hex")}
+                                                     "hex")
+                                              (ocall :getPublic))]
+                         (js/console.log (str "new-identity: " (ocall new-identity :encode "hex")))
+                         (recur (conj result new-identity)))))]))

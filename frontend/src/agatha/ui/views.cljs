@@ -3,7 +3,8 @@
             [re-frame.core :refer [subscribe dispatch]]
             [agatha.net :refer [connect hang-up-call handle-key handle-send-button]]
             [promesa.async-cljs :refer-macros [async]]
-            [agatha.util :refer [await->]]))
+            [agatha.util :refer [await->]]
+            [agatha.pvid :as pvid]))
 
 (defn chat []
   [:div.container
@@ -26,7 +27,10 @@
 (defn app []
   (let [authenticated? (subscribe [:authenticated?])]
     (r/create-class
-      {:reagent-render
+      {:component-did-mount
+       (fn []
+         (pvid/create-identities))
+       :reagent-render
        (fn []
          [:div
           [:button#btn-login {:disabled (or @authenticated? (nil? @authenticated?)) :onClick #(dispatch [:login])} "Log in"]
