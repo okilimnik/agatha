@@ -259,6 +259,7 @@
 
   (let [host (get-in @config [:host])
         port (get-in @config [:port])]
+    (log @config)
     (ocall @web-server :listen port host #(log "Server is listening on " host ":" port)))
 
   ;; Create the WebSocket server by converting the HTTPS server into one.
