@@ -1,5 +1,6 @@
 (ns agatha.pvid
   (:require [oops.core :refer [oget oset! ocall]]
+            [re-frame.core :refer [subscribe dispatch]]
             ["jsbn" :refer [BigInteger]]
             ["js-sha256" :as sha256]
             ["secure-random" :as secureRandom]
@@ -30,19 +31,22 @@
       {:r       @r
        :blinded blinded})))
 
-(defn create-identities []
-  (let [key! (ocall EC :genKeyPair)
+(defn create-identities [& args]
+  (let [{:keys [entropy priv pub]} (first args)
+        key! (if priv
+               (ocall EC :keyPair #js {:priv priv :pub  pub})
+               (ocall EC :genKeyPair #js {:entropy entropy}))
         public (ocall key! :getPublic)
-        y (ocall public :getY)
         identities (loop [result []]
                      (if (= (count result) 10)
                        result
                        (let [last-identity (if (empty? result) public (last result))
-                             new-identity (-> EC
-                                              (ocall :keyFromPublic
-                                                     #js {:x (.toString (ocall key! :derive last-identity) "hex")
-                                                          :y (.toString y "hex")}
-                                                     "hex")
-                                              (ocall :getPublic))]
-                         (js/console.log (str "new-identity: " (ocall new-identity :encode "hex")))
-                         (recur (conj result new-identity)))))]))
+                             new-identity (ocall last-identity :mul (ocall key! :getPrivate))]
+                         (recur (conj result new-identity)))))]
+    (dispatch [:write-to [[:user] {:name       "User"
+                                   :private    (ocall key! :getPrivate "hex")
+                                   :public     (ocall key! :getPublic "hex")
+                                   :identities (map #(-> %
+                                                         (ocall :getX)
+                                                         (.toString 16))
+                                                    identities)}]])))

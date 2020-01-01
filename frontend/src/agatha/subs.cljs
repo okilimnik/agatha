@@ -1,4 +1,4 @@
-(ns agatha.ui.subs
+(ns agatha.subs
   (:require [re-frame.core :refer [reg-sub]]))
 
 (reg-sub

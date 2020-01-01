@@ -1,4 +1,4 @@
-(ns agatha.ui.events
+(ns agatha.events
   (:require [re-frame.core :refer [reg-event-db dispatch]]
             [oops.core :refer [ocall oset! oget]]
             [promesa.async-cljs :refer-macros [async]]

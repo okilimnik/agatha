@@ -5,7 +5,6 @@
   :dependencies [[org.clojure/clojure "1.10.1"]
                  [org.clojure/clojurescript "1.10.597"]
                  [funcool/promesa "1.8.1"]
-                 [datascript "0.18.7"]
                  [reagent "0.9.0-rc2"]
                  [re-frame "0.11.0-rc2"]
                  [binaryage/oops "0.7.0"]]

@@ -2,8 +2,8 @@
   (:require [reagent.core :as r]
             [re-frame.core :as re-frame :refer [subscribe]]
             [oops.core :refer [ocall oset! oget]]
-            [agatha.ui.events]
-            [agatha.ui.subs]
+            [agatha.events]
+            [agatha.subs]
             [agatha.ui.views :as views]
             ["webrtc-adapter" :refer [adapter]]))
 

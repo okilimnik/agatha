@@ -9,6 +9,7 @@
 6. UI.
 
 ## Development
+Node 10.x.x and greater.
 Made with shadow-cljs.
 Please refer to the full [User Guide](https://shadow-cljs.github.io/docs/UsersGuide.html) for more information.
 
